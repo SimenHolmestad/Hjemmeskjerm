@@ -1,0 +1,194 @@
+:root {
+  /* Skjermens fysiske oppløsning */
+  --screen-width: 1404px;
+  --screen-height: 1872px;
+  /* Yr-meteogrammet er 782x391 i originalstørrelse, skaleres til full bredde */
+  --yr-scale: calc(1404 / 782);
+  /* Hvor mye som klippes bort på toppen av Yr-meteogrammet (i skjermpiksler) */
+  --yr-crop: 140px;
+  --fit-scale: 1;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  background: #111;
+  overflow: hidden;
+  font-family: system-ui, sans-serif;
+}
+
+.screen {
+  width: var(--screen-width);
+  height: var(--screen-height);
+  background: #fff;
+  overflow: hidden;
+  transform: scale(var(--fit-scale));
+  transform-origin: top left;
+  display: flex;
+  flex-direction: column;
+}
+
+.yr {
+  width: var(--screen-width);
+  height: calc(391px * var(--yr-scale) - var(--yr-crop));
+  overflow: hidden;
+}
+
+.yr iframe {
+  width: 782px;
+  height: 391px;
+  border: 0;
+  transform: translateY(calc(-1 * var(--yr-crop)))
+    scale(var(--yr-scale));
+  transform-origin: top left;
+}
+
+.entur-tavla {
+  flex: 1;
+  min-height: 0;
+}
+
+.entur-tavla iframe {
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+.statusbar {
+  height: 100px;
+  flex-shrink: 0;
+  border-top: 2px solid #111;
+  border-bottom: 2px solid #111;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 24px;
+  padding: 0 32px;
+}
+
+/* Tøyenbadet-delen: badering, antall inne nå og inn/ut. */
+.toyenbadet {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.toyenbadet-now {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.toyenbadet-flow {
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+  display: grid;
+  grid-template-columns: auto auto;
+  column-gap: 8px;
+  row-gap: 4px;
+  font-size: 22px;
+  line-height: 1;
+}
+
+/* Tallene får egen kolonne, slik at de står rett under hverandre. */
+.toyenbadet-flow span:nth-child(even) {
+  min-width: 4ch;
+  text-align: right;
+}
+
+.toyenbadet-icon {
+  width: 64px;
+  height: 64px;
+  flex-shrink: 0;
+}
+
+/* Netatmo-delen. margin-right gjør at Tøyenbadet-tallene blir stående til høyre. */
+.netatmo {
+  margin-right: auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.netatmo-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.netatmo-icon {
+  height: 32px;
+  width: auto; /* beholder proporsjonene, så streken ikke blir forvrengt */
+  flex-shrink: 0;
+}
+
+.netatmo-icon--cloud {
+  height: 36px;
+}
+
+.netatmo-icon text {
+  font-family: inherit;
+}
+
+.netatmo-value {
+  font-variant-numeric: tabular-nums;
+  font-size: 40px;
+  font-weight: 700;
+  line-height: 1;
+  white-space: nowrap;
+}
+
+.netatmo-unit {
+  margin-left: 3px;
+  font-size: 20px;
+  font-weight: 400;
+}
+
+/* viewBox er nøyaktig like stor som CSS-boksen, så streken ikke blir forvrengt. */
+.netatmo-spark-wrap {
+  position: relative;
+  width: 138px;
+  height: 40px;
+  flex-shrink: 0;
+}
+
+.netatmo-spark {
+  width: 88px;
+  height: 40px;
+}
+
+.netatmo-spark-line {
+  fill: none;
+  stroke: #111;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Stiplet linje fra høyeste og laveste måling og bort til tallet. */
+.netatmo-spark-rule {
+  fill: none;
+  stroke: #111;
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+}
+
+.netatmo-spark-label {
+  position: absolute;
+  font-variant-numeric: tabular-nums;
+  left: 92px;
+  transform: translateY(-50%);
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* CO2 kan gå fra tre til fire sifre i løpet av dagen. Plassen settes av fast,
+   slik at resten av stripa ikke flytter på seg når det skjer. */
+.netatmo-item--co2 .netatmo-value {
+  min-width: 140px;
+}
