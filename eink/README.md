@@ -36,8 +36,6 @@ panelet. Feil VCOM gir et utvasket eller altfor mørkt bilde, ikke en feilmeldin
 
 ## Første gangs test
 
-Ta stegene i rekkefølge – hvert av dem utelukker en feilkilde.
-
 Ta stegene i rekkefølge. Hvert av dem utelukker én feilkilde, og de er lagt opp slik at
 ingenting krever at det forrige steget var perfekt.
 
@@ -83,10 +81,10 @@ cd ~/Hjemmeskjerm/eink/driver && make clean && make
 cd ../render && .venv/bin/python render.py --once -v
 ```
 
-Virker ikke LGPIO, se avsnittet om GPIO 8 nederst.
+Virker ikke LGPIO, se [GPIO 8-avsnittet](#ting-som-er-verdt-å-vite) nederst.
 
-`epaper info` skal svare med `panel_w=1872`, `panel_h=1404` og en LUT-versjon. Feiler
-den, er det SPI/GPIO som er problemet, ikke bildekoden.
+`epaper info` skal uansett backend svare med `panel_w=1872`, `panel_h=1404` og en
+LUT-versjon. Feiler den, er det SPI/GPIO som er problemet, ikke bildekoden.
 
 Er bildet **speilvendt**, er det pakkingen i `driver/src/pack.c` som står feil vei. Står det
 **opp ned**, bytt `panel.rotate` i `eink.toml` mellom 90 og 270.
