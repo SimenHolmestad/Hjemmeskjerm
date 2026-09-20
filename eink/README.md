@@ -38,8 +38,11 @@ panelet. Feil VCOM gir et utvasket eller altfor mørkt bilde, ikke en feilmeldin
 
 Ta stegene i rekkefølge – hvert av dem utelukker en feilkilde.
 
-Bygg med `LIB=BCM` først. Det er den varianten som allerede er kjent å virke på denne
-maskinvaren, så får du bildet riktig én gang før du bytter til LGPIO.
+Ta stegene i rekkefølge. Hvert av dem utelukker én feilkilde, og de er lagt opp slik at
+ingenting krever at det forrige steget var perfekt.
+
+**1. Bygg med BCM og sjekk at panelet svarer.** BCM er den varianten som allerede er kjent å
+virke på denne maskinvaren, så den brukes til å få bildet riktig én gang.
 
 ```sh
 cd ~/Hjemmeskjerm/eink/driver && make LIB=BCM
@@ -48,32 +51,39 @@ sudo ./epaper info     # leser bare enhetsinfo, rører ikke panelet
 sudo ./epaper clear    # skal bli hvitt
 ```
 
-Nettsida må kjøre før `render.py` har noe å ta bilde av. I et eget skall:
+**`sudo` er ikke valgfritt med BCM.** bcm2835 trenger `/dev/mem` for SPI. Uten root faller
+`bcm2835_init()` tilbake til `/dev/gpiomem` og returnerer *suksess*, men lar
+SPI-registerpekeren stå som NULL – og da segfaulter `bcm2835_spi_begin()` rett etterpå. Vi
+sjekker for root på forhånd og sier fra i stedet, men det er verdt å vite hvorfor.
+
+**2. Lag et bilde, og vis det.** `--no-display` skriver bare BMP-fila og rører ikke panelet,
+så dette steget trenger verken root eller skjerm. Nettsida må kjøre i et eget skall:
 
 ```sh
 cd ~/Hjemmeskjerm/webpage && pnpm preview --port 4173
 ```
 
-og så, i det første:
+og så, i det første skallet:
 
 ```sh
-cd ~/Hjemmeskjerm/eink/render && .venv/bin/python render.py --once -v
+cd ~/Hjemmeskjerm/eink/render && .venv/bin/python render.py --once --no-display -v
+cd ../driver && sudo ./epaper display ../frame.bmp
 ```
 
-(`render.py` sjekker at noen svarer på porten før den starter chromium, så du får en
-forståelig feilmelding og ikke et kræsj hvis du glemmer det.)
+Nå skal nettsida stå på skjermen. Er den **speilvendt**, er det pakkingen i
+`driver/src/pack.c` som står feil vei. Står den **opp ned**, bytt `panel.rotate` i
+`eink.toml` mellom 90 og 270.
 
-**`sudo` er ikke valgfritt når man bygger med BCM.** bcm2835 trenger `/dev/mem` for SPI.
-Uten root faller `bcm2835_init()` tilbake til `/dev/gpiomem` og returnerer *suksess*, men
-lar SPI-registerpekeren stå som NULL – og da segfaulter `bcm2835_spi_begin()` rett etterpå.
-Vi sjekker for root på forhånd og sier fra i stedet, men det er verdt å vite hvorfor.
-
-Bygg med LGPIO når bildet står riktig, så slipper du root:
+**3. Bytt til LGPIO.** `render.py` kjører som vanlig bruker, så den kan ikke bruke et
+BCM-bygg i det hele tatt – BCM krever root. Det er derfor tjenesten trenger LGPIO:
 
 ```sh
-make clean && make
-./epaper info
+cd ~/Hjemmeskjerm/eink/driver && make clean && make
+./epaper info          # nå uten sudo
+cd ../render && .venv/bin/python render.py --once -v
 ```
+
+Virker ikke LGPIO, se avsnittet om GPIO 8 nederst.
 
 `epaper info` skal svare med `panel_w=1872`, `panel_h=1404` og en LUT-versjon. Feiler
 den, er det SPI/GPIO som er problemet, ikke bildekoden.

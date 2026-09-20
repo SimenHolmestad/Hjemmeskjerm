@@ -127,17 +127,46 @@ def lag_bilde(png: bytes, cfg: Config, lut: list[int]) -> Image.Image:
     return bilde.point(lut)
 
 
-def kall_epaper(cfg: Config, *args: str) -> None:
-    """Kjører epaper-programmet. Kaster CalledProcessError ved feil."""
+def kall_epaper(cfg: Config, *args: str) -> str:
+    """Kjører epaper-programmet og returnerer det det skrev.
+
+    Kaster RuntimeError ved feil, med programmets egen utskrift i meldinga –
+    epaper forklarer stort sett selv hva som er galt, og den forklaringa er
+    til liten nytte hvis den blir liggende i en pipe ingen leser.
+    """
     kommando = [str(cfg.epaper), *args]
     miljo = {**os.environ, "EPAPER_VCOM": f"{cfg.vcom}"}
     log.debug("kjører %s", " ".join(kommando))
     start = time.monotonic()
-    subprocess.run(
-        kommando, env=miljo, check=True, timeout=cfg.timeout,
+    res = subprocess.run(
+        kommando, env=miljo, timeout=cfg.timeout,
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
+    utdata = (res.stdout or "").strip()
+
+    if res.returncode != 0:
+        if res.returncode < 0:
+            sig = -res.returncode
+            navn = signal.Signals(sig).name if sig in signal.Signals.__members__.values() else sig
+            grunn = f"ble drept av signal {navn}"
+        else:
+            grunn = f"avsluttet med kode {res.returncode}"
+
+        deler = [f"epaper {args[0]} {grunn}"]
+        if utdata:
+            deler.append(utdata.rstrip("."))
+        # Den desidert vanligste årsaken: binæret er bygget med LIB=BCM, som
+        # krever root, mens render.py kjører som vanlig bruker. Eldre bygg
+        # segfaulter i stedet for å si fra.
+        if res.returncode in (-signal.SIGSEGV, 3):
+            deler.append(
+                "Er epaper bygget med LIB=BCM? Det krever root, og render.py "
+                "kjorer uten. Bygg med LGPIO: cd eink/driver && make clean && make"
+            )
+        raise RuntimeError(". ".join(deler))
+
     log.debug("%s tok %.1f s", args[0], time.monotonic() - start)
+    return utdata
 
 
 def vent_på_server(url: str, budsjett: float) -> bool:
@@ -286,6 +315,15 @@ def main() -> int:
         log.error("eller, hvis tjenesten er satt opp:")
         log.error("    sudo systemctl start hjemmeskjerm-web")
         return 1
+
+    if vis:
+        # info rører ikke panelet, men går gjennom hele SPI/GPIO-oppsettet.
+        # Feiler den, er det ingen vits i å rendre først og oppdage det etterpå.
+        try:
+            log.debug("panel: %s", kall_epaper(cfg, "info").replace("\n", " "))
+        except Exception as e:
+            log.error("%s", e)
+            return 1
 
     lut = bygg_lut(cfg.gamma, cfg.kontrast)
     nettleser = Nettleser(cfg)
