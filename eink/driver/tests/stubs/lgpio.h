@@ -21,6 +21,7 @@ int lgSpiOpen(int spiDev, int spiChan, int spiBaud, int spiFlags);
 int lgSpiClose(int handle);
 int lgSpiRead(int handle, char *rxBuf, int count);
 int lgSpiWrite(int handle, const char *txBuf, int count);
+int lgSpiXfer(int handle, const char *txBuf, char *rxBuf, int count);
 void lguSleep(double sleepSecs);
 
 #endif

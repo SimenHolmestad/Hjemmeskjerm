@@ -79,7 +79,13 @@ void DEV_SPI_WriteByte(UBYTE Value)
 #ifdef BCM
 	bcm2835_spi_transfer(Value);
 #elif  LGPIO 
-    lgSpiWrite(SPI_Handle,(char*)&Value, 1);
+    /* hjemmeskjerm: lgSpiXfer (full dupleks) i stedet for lgSpiWrite, slik at
+     * LGPIO oppfoerer seg som BCM-veien. bcm2835_spi_transfer() er full
+     * dupleks, og det er den veien panelet er verifisert paa her. */
+    {
+        char tx = (char)Value, rx = 0;
+        lgSpiXfer(SPI_Handle, &tx, &rx, 1);
+    }
 #elif GPIOD
 	DEV_HARDWARE_SPI_TransferByte(Value);
 #endif
@@ -96,7 +102,14 @@ UBYTE DEV_SPI_ReadByte()
 #ifdef BCM
 	Read_Value = bcm2835_spi_transfer(0x00);
 #elif  LGPIO 
-    lgSpiRead(SPI_Handle, (char*)&Read_Value, 1);
+    /* hjemmeskjerm: var lgSpiRead, som bare mottar og lar MOSI staa i det
+     * kjernedriveren nå velger. IT8951 vil ha MOSI lav mens den klokker ut
+     * data, og det er nettopp det bcm2835_spi_transfer(0x00) gjoer. */
+    {
+        char tx = 0x00, rx = 0;
+        lgSpiXfer(SPI_Handle, &tx, &rx, 1);
+        Read_Value = (UBYTE)rx;
+    }
 #elif GPIOD
 	Read_Value = DEV_HARDWARE_SPI_TransferByte(0x00);
 #endif

@@ -244,6 +244,16 @@ int main(int argc, char **argv)
     avbrutt_hvis_bedt_om();
 
     if (er_info) {
+        if (Debug_Enabled) {
+            /* Ra bytes fra GetSystemInfo. Bare nuller betyr at ingenting
+             * svarer; soppel betyr at SPI gaar, men at noe annet er galt. */
+            const unsigned char *ra = (const unsigned char *)&info;
+            fprintf(stderr, "ra enhetsinfo:");
+            for (size_t i = 0; i < sizeof info; i++) {
+                fprintf(stderr, "%s%02x", (i % 16 == 0) ? "\n  " : " ", ra[i]);
+            }
+            fputc('\n', stderr);
+        }
         char fw[16], lut[16];
         trygg_streng(fw, sizeof fw, (const UBYTE *)info.FW_Version, 16);
         trygg_streng(lut, sizeof lut, (const UBYTE *)info.LUT_Version, 16);
