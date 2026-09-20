@@ -72,18 +72,41 @@ Nå skal nettsida stå på skjermen. Er den **speilvendt**, er det pakkingen i
 `driver/src/pack.c` som står feil vei. Står den **opp ned**, bytt `panel.rotate` i
 `eink.toml` mellom 90 og 270.
 
-**3. Bytt til LGPIO.** `render.py` kjører som vanlig bruker, så den kan ikke bruke et
-BCM-bygg i det hele tatt – BCM krever root. Det er derfor tjenesten trenger LGPIO:
+**3. Få `render.py` til å nå panelet.** `render.py` kjører som vanlig bruker – blant annet
+fordi chromium nekter å kjøre som root uten `--no-sandbox` – mens et BCM-bygg krever root.
+Det er to veier ut av det.
+
+*Enten* bygg med LGPIO, som ikke trenger root i det hele tatt:
 
 ```sh
 cd ~/Hjemmeskjerm/eink/driver && make clean && make
 ./epaper info          # nå uten sudo
-cd ../render && .venv/bin/python render.py --once -v
 ```
 
-Svarer `epaper info` med `panelet rapporterte 0x0`, kom oppsettet opp, men panelet svarer
-ikke. Prøv en lavere SPI-frekvens først – se [SPI-frekvens](#spi-frekvens) nedenfor. Feiler
-selve oppsettet i stedet, se [GPIO 8](#ting-som-er-verdt-å-vite) nederst.
+*eller* behold BCM-bygget og la `render.py` kalle det gjennom `sudo`. Sett
+`use_sudo = true` under `[paths]` i `eink.toml`, og gi brukeren lov til å kjøre akkurat det
+ene programmet uten passord:
+
+```sh
+echo "simen ALL=(root) NOPASSWD: /home/simen/Hjemmeskjerm/eink/driver/epaper" \
+  | sudo tee /etc/sudoers.d/epaper
+sudo chmod 440 /etc/sudoers.d/epaper
+sudo -n ~/Hjemmeskjerm/eink/driver/epaper info    # skal virke uten passord
+```
+
+Da kjører fortsatt bare selve paneloppdateringa som root, ikke nettleseren.
+
+Uansett vei:
+
+```sh
+cd ~/Hjemmeskjerm/eink/render && .venv/bin/python render.py --once -v
+```
+
+Svarer `epaper info` med `panelet rapporterte 0x0` under LGPIO, kom oppsettet opp, men
+panelet svarer ikke. `./epaper info -v` dumper da de rå bytene fra panelet: bare nuller
+betyr at ingenting svarer, søppel betyr at SPI går og at noe annet er galt. Se
+[Når LGPIO ikke svarer](#når-lgpio-ikke-svarer) nedenfor. Det er ingen hast med å løse
+det – BCM-veien over virker, og `use_sudo` gjør at tjenesten kan bruke den.
 
 `epaper info` skal uansett backend svare med `panel_w=1872`, `panel_h=1404` og en
 LUT-versjon. Feiler den, er det SPI/GPIO som er problemet, ikke bildekoden.
@@ -135,6 +158,38 @@ make check      # syntakssjekker alt uten å lenke, virker også på en Mac
 `make test` og `make check` kjører fint på en utviklingsmaskin uten e-paper. Det samme gjør
 `render.py --once --no-display`, som skriver `frame.bmp` uten å røre panelet – nyttig for å
 se hva som faktisk fanges opp før det havner på veggen.
+
+## Når LGPIO ikke svarer
+
+Symptomet er at `epaper info` kommer gjennom oppsettet, men rapporterer `0x0`. På denne
+maskina er følgende allerede utelukket: riktig gpiochip (`gpiodetect` viser `gpiochip0
+[pinctrl-bcm2835]`), ingen som holder GPIO 8 (`gpioinfo` viser ingen `consumer=` på linje 8),
+og SPI-frekvensen (helt ned til 1 MHz gir samme resultat).
+
+Det som gjenstår å prøve, i rekkefølge:
+
+1. **`dtoverlay=spi0-0cs`.** LGPIO-veien ble lagt til av Waveshare for Pi 5, og deres egen
+   readme sier at man da skal kommentere ut `dtparam=spi=on` og legge inn `spi0-0cs` i
+   stedet. Den overlayen gir spi0 null chip-select-linjer, så SPI-kontrolleren slutter å
+   røre CE0 i det hele tatt, og driveren står fritt til å styre GPIO 8 selv.
+
+   ```sh
+   sudo nano /boot/firmware/config.txt   # kommenter ut dtparam=spi=on, legg til:
+   # dtoverlay=spi0-0cs
+   sudo reboot
+   ```
+
+2. **Sammenlikn mux-tilstanden** mellom en BCM-kjøring og en LGPIO-kjøring:
+
+   ```sh
+   pinctrl get 7-11        # eller: raspi-gpio get 7-11
+   ```
+
+   Under BCM skal 9, 10 og 11 være ALT0 og 8 være OUTPUT.
+
+3. **BUSY-pinnen.** `./epaper info -v` skriver også hva GPIO 24 leser. Står den fast på 0
+   mens panelet har strøm, kommer ikke GPIO-lesingene fram heller, og da er det ikke et
+   rent SPI-problem.
 
 ## SPI-frekvens
 

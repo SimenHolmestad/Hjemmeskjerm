@@ -76,6 +76,10 @@ class Config:
 
         stier = raw.get("paths", {})
         self.epaper = (rot / stier.get("epaper", "driver/epaper")).resolve()
+        # Et BCM-bygg krever root. render.py kjører som vanlig bruker – blant
+        # annet fordi chromium nekter å kjøre som root uten --no-sandbox – så
+        # da må selve epaper-kallet gå gjennom sudo.
+        self.bruk_sudo = bool(stier.get("use_sudo", False))
         self.frame = (rot / stier.get("frame", "frame.bmp")).resolve()
         self.timeout = float(stier.get("timeout_seconds", 180))
 
@@ -135,6 +139,9 @@ def kall_epaper(cfg: Config, *args: str) -> str:
     til liten nytte hvis den blir liggende i en pipe ingen leser.
     """
     kommando = [str(cfg.epaper), *args]
+    if cfg.bruk_sudo:
+        # -n: feil heller enn å bli stående og vente på et passord ingen ser.
+        kommando = ["sudo", "-n", *kommando]
     miljo = {**os.environ, "EPAPER_VCOM": f"{cfg.vcom}"}
     log.debug("kjører %s", " ".join(kommando))
     start = time.monotonic()
@@ -159,10 +166,17 @@ def kall_epaper(cfg: Config, *args: str) -> str:
         # krever root, mens render.py kjører som vanlig bruker. Eldre bygg
         # segfaulter i stedet for å si fra.
         if res.returncode in (-signal.SIGSEGV, 3):
-            deler.append(
-                "Er epaper bygget med LIB=BCM? Det krever root, og render.py "
-                "kjorer uten. Bygg med LGPIO: cd eink/driver && make clean && make"
-            )
+            if cfg.bruk_sudo:
+                deler.append(
+                    "use_sudo er på – virker `sudo -n " + str(cfg.epaper) + " info` "
+                    "fra denne brukeren? Se sudoers-oppsettet i eink/README.md"
+                )
+            else:
+                deler.append(
+                    "Er epaper bygget med LIB=BCM? Det krever root, og render.py "
+                    "kjorer uten. Sett use_sudo = true i eink.toml, eller bygg med "
+                    "LGPIO: cd eink/driver && make clean && make"
+                )
         raise RuntimeError(". ".join(deler))
 
     log.debug("%s tok %.1f s", args[0], time.monotonic() - start)

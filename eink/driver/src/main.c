@@ -227,6 +227,21 @@ int main(int argc, char **argv)
     int vcom_mv = les_vcom_mv();
     IT8951_Dev_Info info = EPD_IT8951_Init((UWORD)vcom_mv);
 
+    if (Debug_Enabled) {
+        /* Ra bytes fra GetSystemInfo, FOER fornuftssjekken - det er nettopp
+         * naar den slaar til at man trenger aa se hva som faktisk kom inn.
+         * Bare nuller betyr at ingenting svarer; soppel betyr at SPI gaar,
+         * men at noe annet er galt. */
+        const unsigned char *ra = (const unsigned char *)&info;
+        fprintf(stderr, "ra enhetsinfo (%zu byte):", sizeof info);
+        for (size_t i = 0; i < sizeof info; i++) {
+            fprintf(stderr, "%s%02x", (i % 16 == 0) ? "\n  " : " ", ra[i]);
+        }
+        fputc('\n', stderr);
+        fprintf(stderr, "BUSY-pinne (GPIO %d) leser: %d\n",
+                EPD_BUSY_PIN, DEV_Digital_Read(EPD_BUSY_PIN));
+    }
+
     /* En dod SPI-buss gir gjerne plausible, men helt gale tall. */
     if (info.Panel_W == 0 || info.Panel_H == 0
         || info.Panel_W > 4096 || info.Panel_H > 4096) {
@@ -244,16 +259,6 @@ int main(int argc, char **argv)
     avbrutt_hvis_bedt_om();
 
     if (er_info) {
-        if (Debug_Enabled) {
-            /* Ra bytes fra GetSystemInfo. Bare nuller betyr at ingenting
-             * svarer; soppel betyr at SPI gaar, men at noe annet er galt. */
-            const unsigned char *ra = (const unsigned char *)&info;
-            fprintf(stderr, "ra enhetsinfo:");
-            for (size_t i = 0; i < sizeof info; i++) {
-                fprintf(stderr, "%s%02x", (i % 16 == 0) ? "\n  " : " ", ra[i]);
-            }
-            fputc('\n', stderr);
-        }
         char fw[16], lut[16];
         trygg_streng(fw, sizeof fw, (const UBYTE *)info.FW_Version, 16);
         trygg_streng(lut, sizeof lut, (const UBYTE *)info.LUT_Version, 16);
