@@ -63,6 +63,10 @@
     #include <lgpio.h>
     #define LFLAGS 0
     #define NUM_MAXBUF  4
+    /* hjemmeskjerm: SPI-frekvens, settes med `make SPI_HZ=...`. */
+    #ifndef EPAPER_SPI_HZ
+        #define EPAPER_SPI_HZ 7812500
+    #endif
 #elif GPIOD
     #include "RPI_gpiod.h"
     #include "dev_hardware_SPI.h"

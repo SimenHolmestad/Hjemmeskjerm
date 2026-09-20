@@ -81,7 +81,9 @@ cd ~/Hjemmeskjerm/eink/driver && make clean && make
 cd ../render && .venv/bin/python render.py --once -v
 ```
 
-Virker ikke LGPIO, se [GPIO 8-avsnittet](#ting-som-er-verdt-å-vite) nederst.
+Svarer `epaper info` med `panelet rapporterte 0x0`, kom oppsettet opp, men panelet svarer
+ikke. Prøv en lavere SPI-frekvens først – se [SPI-frekvens](#spi-frekvens) nedenfor. Feiler
+selve oppsettet i stedet, se [GPIO 8](#ting-som-er-verdt-å-vite) nederst.
 
 `epaper info` skal uansett backend svare med `panel_w=1872`, `panel_h=1404` og en
 LUT-versjon. Feiler den, er det SPI/GPIO som er problemet, ikke bildekoden.
@@ -133,6 +135,30 @@ make check      # syntakssjekker alt uten å lenke, virker også på en Mac
 `make test` og `make check` kjører fint på en utviklingsmaskin uten e-paper. Det samme gjør
 `render.py --once --no-display`, som skriver `frame.bmp` uten å røre panelet – nyttig for å
 se hva som faktisk fanges opp før det havner på veggen.
+
+## SPI-frekvens
+
+Waveshare hardkodet 12,5 MHz i LGPIO-veien, mens BCM-veien kjører på 250 MHz / 32 = 7,8 MHz
+på en Pi 3. Det er altså ikke samme fart på de to backendene, og et panel som er fornøyd med
+den ene kan tie helt stille på den andre. Vi bruker 7,8 MHz som standard, siden det er farten
+panelet er verifisert på her.
+
+Får du `panelet rapporterte 0x0`, prøv deg nedover:
+
+```sh
+for hz in 7812500 4000000 2000000 1000000; do
+  make clean >/dev/null && make SPI_HZ=$hz >/dev/null && echo "--- $hz Hz ---" && ./epaper info
+done
+```
+
+Første frekvens som gir `panel_w=1872` er svaret. Sett den som standard ved å endre `SPI_HZ`
+i `Makefile`. Går ingen av dem, er det ikke farten som er problemet – se GPIO 8 nedenfor.
+
+`-v` viser hvilken gpiochip som ble åpnet og hvilken frekvens SPI kjører på:
+
+```sh
+./epaper info -v
+```
 
 ## Ting som er verdt å vite
 

@@ -7,6 +7,10 @@
 
 LIB             ?= LGPIO
 VCOM_DEFAULT_MV ?= 1140          # -1,14 V. Overstyres av EPAPER_VCOM.
+# SPI-frekvens for LGPIO. 7 812 500 Hz er det samme som BCM-veien kjører på
+# en Pi 3 (250 MHz / 32), altså den farten panelet er verifisert på. Waveshare
+# hardkodet 12 500 000, som ikke nødvendigvis virker på alle paneler.
+SPI_HZ          ?= 7812500
 
 SRC_DIR = src
 VEN_DIR = vendor/it8951
@@ -17,7 +21,8 @@ CC     ?= gcc
 WARN   = -Wall -Wextra -Wno-unused-parameter
 CFLAGS += -std=gnu11 $(WARN) -O2 -g -fno-strict-aliasing \
           -I$(SRC_DIR) -I$(VEN_DIR) \
-          -DEPAPER_VCOM_DEFAULT_MV=$(VCOM_DEFAULT_MV)
+          -DEPAPER_VCOM_DEFAULT_MV=$(VCOM_DEFAULT_MV) \
+          -DEPAPER_SPI_HZ=$(SPI_HZ)
 LDLIBS  = -lm -lrt -lpthread
 
 # -fno-strict-aliasing er ikke valgfritt: driveren caster vår UBYTE*-buffer

@@ -267,6 +267,7 @@ UBYTE DEV_Module_Init(void)
 
     if(fgets(buffer, sizeof(buffer), fp) != NULL)
     {
+        Debug("apner gpiochip4 (Raspberry Pi 5)\n");
         GPIO_Handle = lgGpiochipOpen(4);
         if (GPIO_Handle < 0)
         {
@@ -276,6 +277,7 @@ UBYTE DEV_Module_Init(void)
     }
     else
     {
+        Debug("apner gpiochip0\n");
         GPIO_Handle = lgGpiochipOpen(0);
         if (GPIO_Handle < 0)
         {
@@ -283,7 +285,11 @@ UBYTE DEV_Module_Init(void)
             return -1;
         }
     }
-    SPI_Handle = lgSpiOpen(0, 0, 12500000, 0);
+    /* hjemmeskjerm: var hardkodet 12,5 MHz. BCM-veien kjorer paa
+     * 250MHz/32 = 7,8 MHz paa en Pi 3, og det er den farten panelet er
+     * verifisert paa her. Settes med `make SPI_HZ=...`. */
+    Debug("lgSpiOpen(spidev0.0) @ %d Hz\n", EPAPER_SPI_HZ);
+    SPI_Handle = lgSpiOpen(0, 0, EPAPER_SPI_HZ, 0);
     if (SPI_Handle < 0) {   /* hjemmeskjerm: var usjekket */
         Debug("lgSpiOpen(/dev/spidev0.0) feilet: %d\n", SPI_Handle);
         return -1;
