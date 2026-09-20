@@ -1,0 +1,23 @@
+# Løkka som tar skjermbilde av sida og viser det på e-paper-skjermen.
+
+[Unit]
+Description=Hjemmeskjerm – e-paper-visning
+After=hjemmeskjerm-web.service
+Wants=hjemmeskjerm-web.service
+
+[Service]
+Type=simple
+User=simen
+WorkingDirectory=/home/simen/hjemmeskjerm/eink/render
+ExecStart=/home/simen/hjemmeskjerm/eink/render/.venv/bin/python render.py
+Restart=always
+RestartSec=30
+# Med LGPIO trengs ingen root, bare medlemskap i gruppene gpio og spi.
+# Bygger du med LIB=BCM må dette kjøres som root i stedet.
+SupplementaryGroups=gpio spi
+# render.py holder chromium i live mellom rundene; ta med hele treet ved stopp.
+KillMode=mixed
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target

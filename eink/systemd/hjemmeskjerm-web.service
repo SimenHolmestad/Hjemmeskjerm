@@ -1,0 +1,25 @@
+# Serverer nettsida lokalt på Pi-en. Bare render.py snakker med den, så den
+# binder seg med vilje til localhost.
+#
+# Installeres med:
+#   sudo cp eink/systemd/*.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now hjemmeskjerm-web hjemmeskjerm-eink
+
+[Unit]
+Description=Hjemmeskjerm – nettside (vite preview)
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=simen
+WorkingDirectory=/home/simen/hjemmeskjerm/webpage
+# preview serverer det ferdigbygde resultatet. Husk `pnpm build` etter en
+# `git pull` som endrer nettsida.
+ExecStart=/usr/bin/pnpm preview --port 4173
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

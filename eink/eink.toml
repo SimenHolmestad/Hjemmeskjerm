@@ -1,0 +1,42 @@
+# Konfigurasjon for e-paper-visningen. Leses av render/render.py, som sender
+# VCOM videre til epaper-programmet som miljøvariabelen EPAPER_VCOM.
+
+[page]
+url            = "http://localhost:4173/"
+width          = 1404          # nettsidas format, stående
+height         = 1872
+# Entur-tavla og YR-widgeten ligger i iframe-er fra andre domener. Vi kan
+# ikke spørre dem når de er ferdige, så vi venter en fast tid. Er tallene i
+# statuslinja fortsatt "–" på skjermbildet, er denne for lav.
+settle_seconds = 10
+# Sida oppdaterer sine egne tall selv, så vi laster den sjelden på nytt.
+# Det er først og fremst for å holde minnebruken i sjakk.
+reload_minutes = 60
+
+[panel]
+width  = 1872                  # slik IT8951 selv rapporterer det, liggende
+height = 1404
+vcom   = -1.14                 # står på klistremerket på flexkabelen
+# 90 eller 270. Hvilken som er riktig avhenger av hvordan skjermen henger.
+# Står bildet opp ned, bytt til den andre.
+rotate = 90
+
+[image]
+# Justeres mot det ekte panelet – e-paper ser gjerne flatere ut enn en skjerm.
+# gamma > 1 gjør bildet lysere, contrast > 1 gjør det hardere.
+gamma    = 1.0
+contrast = 1.0
+
+[loop]
+interval_seconds = 300
+# Hver n-te runde gjør vi en full INIT-klaring først, for å skrubbe bort
+# ghosting. 0 slår det av.
+init_clear_every = 20
+
+[paths]
+# Relative stier regnes ut fra mappa denne fila ligger i.
+epaper  = "driver/epaper"
+frame   = "frame.bmp"
+# Et display-kall kan ta over et minutt, siden driveren skriver SPI byte for
+# byte. Timeouten er sikkerhetsnettet mot at det henger helt.
+timeout_seconds = 180
