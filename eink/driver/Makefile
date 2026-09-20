@@ -67,7 +67,7 @@ test:
 # Syntakssjekk uten lenking, mot en stubbet lgpio.h. Lar oss fange skrivefeil
 # på en maskin uten liblgpio – typisk utviklingsmaskina.
 check:
-	$(CC) -fsyntax-only -std=gnu11 $(WARN) -DLGPIO \
+	$(CC) -fsyntax-only -std=gnu11 $(WARN) -D$(LIB) \
 	      -I$(SRC_DIR) -I$(VEN_DIR) -Itests/stubs \
 	      $(OUR_SRCS) $(VEN_SRCS) \
 	      -Wno-unused-but-set-variable -Wno-unused-function

@@ -221,6 +221,18 @@ UBYTE DEV_Module_Init(void)
     Debug("/***********************************/ \r\n");
 
 #ifdef BCM
+	/* hjemmeskjerm: bcm2835 trenger root for SPI. Uten root faller
+	 * bcm2835_init() tilbake til /dev/gpiomem og returnerer SUKSESS, men
+	 * lar SPI-registerpekeren staa som NULL - og da segfaulter
+	 * bcm2835_spi_begin() rett nedenfor. Sjekken her gjor at man far vite
+	 * hva som er galt i stedet for et kraesj. */
+	if (geteuid() != 0) {
+		fprintf(stderr,
+			"epaper: bygget med LIB=BCM, som krever root. Kjor med sudo,\n"
+			"        eller bygg med LGPIO (make clean && make) og legg\n"
+			"        brukeren i gruppene gpio og spi.\n");
+		return 1;
+	}
 	if(!bcm2835_init()) {
 		Debug("bcm2835 init failed  !!! \r\n");
 		return 1;

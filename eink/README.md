@@ -38,15 +38,30 @@ panelet. Feil VCOM gir et utvasket eller altfor mørkt bilde, ikke en feilmeldin
 
 Ta stegene i rekkefølge – hvert av dem utelukker en feilkilde.
 
-```sh
-cd ~/hjemmeskjerm/eink/driver
+Bygg med `LIB=BCM` først. Det er den varianten som allerede er kjent å virke på denne
+maskinvaren, så får du bildet riktig én gang før du bytter til LGPIO.
 
-./epaper info          # leser bare enhetsinfo, rører ikke panelet
-./epaper clear         # skal bli hvitt
+```sh
+cd ~/hjemmeskjerm/eink/driver && make LIB=BCM
+
+sudo ./epaper info     # leser bare enhetsinfo, rører ikke panelet
+sudo ./epaper clear    # skal bli hvitt
 cd ../render && .venv/bin/python render.py --once -v
 ```
 
-`./epaper info` skal svare med `panel_w=1872`, `panel_h=1404` og en LUT-versjon. Feiler
+**`sudo` er ikke valgfritt når man bygger med BCM.** bcm2835 trenger `/dev/mem` for SPI.
+Uten root faller `bcm2835_init()` tilbake til `/dev/gpiomem` og returnerer *suksess*, men
+lar SPI-registerpekeren stå som NULL – og da segfaulter `bcm2835_spi_begin()` rett etterpå.
+Vi sjekker for root på forhånd og sier fra i stedet, men det er verdt å vite hvorfor.
+
+Bygg med LGPIO når bildet står riktig, så slipper du root:
+
+```sh
+make clean && make
+./epaper info
+```
+
+`epaper info` skal svare med `panel_w=1872`, `panel_h=1404` og en LUT-versjon. Feiler
 den, er det SPI/GPIO som er problemet, ikke bildekoden.
 
 Er bildet **speilvendt**, er det pakkingen i `driver/src/pack.c` som står feil vei. Står det
