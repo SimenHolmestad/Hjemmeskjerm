@@ -36,11 +36,17 @@
 #define __DEBUG_H
 
 #include <stdio.h>
+#include "epd_host.h"   /* hjemmeskjerm: Debug_Enabled */
 
+/* hjemmeskjerm: skriver til stderr, ikke stdout. `epaper info` skriver
+ * key=value til stdout, og den utskriften må ikke blandes med driverlogg.
+ * Loggen er dessuten av som standard; -v eller EPAPER_DEBUG=1 slår den på. */
 #if DEBUG
-	#define Debug(fmt,...) printf("%s[%d]:"fmt,__FILE__,__LINE__,##__VA_ARGS__)
+	#define Debug(fmt,...) do { if (Debug_Enabled) \
+		fprintf(stderr, "%s[%d]:" fmt, __FILE__, __LINE__, ##__VA_ARGS__); } while (0)
 #else
-	#define Debug(fmt,...) printf(fmt,##__VA_ARGS__)
+	#define Debug(fmt,...) do { if (Debug_Enabled) \
+		fprintf(stderr, fmt, ##__VA_ARGS__); } while (0)
 #endif
 
 #endif

@@ -143,7 +143,7 @@ void DEV_Delay_us(UDOUBLE xus)
 /**
  * GPIO Mode
 **/
-static void DEV_GPIO_Mode(UWORD Pin, UWORD Mode)
+static int DEV_GPIO_Mode(UWORD Pin, UWORD Mode)   /* hjemmeskjerm: var void */
 {
 #ifdef BCM
 	if(Mode == 0 || Mode == BCM2835_GPIO_FSEL_INPT) {
@@ -152,12 +152,19 @@ static void DEV_GPIO_Mode(UWORD Pin, UWORD Mode)
 		bcm2835_gpio_fsel(Pin, BCM2835_GPIO_FSEL_OUTP);
 	}
 #elif  LGPIO  
+    /* hjemmeskjerm: returverdiene var usjekket. Kjernen kan allerede eie
+     * GPIO 8 (CS) via cs-gpios i device tree; da feiler claim, CS-skrivingene
+     * blir no-ops, og panelet far soppel uten at noe sier fra. Se README om
+     * dtoverlay=spi0-0cs. */
+    int lg_ret;
     if(Mode == 0 || Mode == LG_SET_INPUT){
-        lgGpioClaimInput(GPIO_Handle,LFLAGS,Pin);
-        // Debug("IN Pin = %d\r\n",Pin);
+        lg_ret = lgGpioClaimInput(GPIO_Handle,LFLAGS,Pin);
     }else{
-        lgGpioClaimOutput(GPIO_Handle, LFLAGS, Pin, LG_LOW);
-        // Debug("OUT Pin = %d\r\n",Pin);
+        lg_ret = lgGpioClaimOutput(GPIO_Handle, LFLAGS, Pin, LG_LOW);
+    }
+    if (lg_ret < 0) {
+        Debug("lgGpioClaim feilet for pinne %d: %d\n", Pin, lg_ret);
+        return -1;
     }
 #elif GPIOD
 	if(Mode == 0 || Mode == GPIOD_IN) {
@@ -168,36 +175,38 @@ static void DEV_GPIO_Mode(UWORD Pin, UWORD Mode)
 		// Debug("OUT Pin = %d\r\n",Pin);
 	}
 #endif
+	return 0;   /* hjemmeskjerm */
 }
 
 
 /**
  * GPIO Init
 **/
-static void DEV_GPIO_Init(void)
+/* hjemmeskjerm: var `static void`, og slukte feil fra DEV_GPIO_Mode. */
+static int DEV_GPIO_Init(void)
 {
 #ifdef BCM
-	DEV_GPIO_Mode(EPD_RST_PIN, BCM2835_GPIO_FSEL_OUTP);
-	DEV_GPIO_Mode(EPD_CS_PIN, BCM2835_GPIO_FSEL_OUTP);
-	DEV_GPIO_Mode(EPD_BUSY_PIN, BCM2835_GPIO_FSEL_INPT);
+	if (DEV_GPIO_Mode(EPD_RST_PIN, BCM2835_GPIO_FSEL_OUTP) != 0) return -1;
+	if (DEV_GPIO_Mode(EPD_CS_PIN, BCM2835_GPIO_FSEL_OUTP) != 0) return -1;
+	if (DEV_GPIO_Mode(EPD_BUSY_PIN, BCM2835_GPIO_FSEL_INPT) != 0) return -1;
 
 	DEV_Digital_Write(EPD_CS_PIN, HIGH);
 
 #elif LGPIO
-	DEV_GPIO_Mode(EPD_BUSY_PIN, 0);
-	DEV_GPIO_Mode(EPD_RST_PIN, 1);
-    DEV_GPIO_Mode(EPD_CS_PIN, 1);
+	if (DEV_GPIO_Mode(EPD_BUSY_PIN, 0) != 0) return -1;
+	if (DEV_GPIO_Mode(EPD_RST_PIN, 1) != 0) return -1;
+	if (DEV_GPIO_Mode(EPD_CS_PIN, 1) != 0) return -1;
 
     DEV_Digital_Write(EPD_CS_PIN, 1);
 
 #elif GPIOD
-	DEV_GPIO_Mode(EPD_BUSY_PIN, 0);
-	DEV_GPIO_Mode(EPD_RST_PIN, 1);
-    DEV_GPIO_Mode(EPD_CS_PIN, 1);
+	if (DEV_GPIO_Mode(EPD_BUSY_PIN, 0) != 0) return -1;
+	if (DEV_GPIO_Mode(EPD_RST_PIN, 1) != 0) return -1;
+	if (DEV_GPIO_Mode(EPD_CS_PIN, 1) != 0) return -1;
 
     DEV_Digital_Write(EPD_CS_PIN, 1);
 #endif
-	
+	return 0;
 }
 
 
@@ -228,20 +237,12 @@ UBYTE DEV_Module_Init(void)
 	/*http://www.airspayce.com/mikem/bcm2835/group__constants.html#gaf2e0ca069b8caef24602a02e8a00884e*/
 
     //GPIO Config
-	DEV_GPIO_Init();
-#elif USE_WIRINGPI_LIB
-	//if(wiringPiSetup() < 0)//use wiringpi Pin number table
-	if(wiringPiSetupGpio() < 0) { //use BCM2835 Pin number table
-		printf("set wiringPi lib failed	!!! \r\n");
-		return 1;
-	} else {
-		printf("set wiringPi lib success !!! \r\n");
+	if (DEV_GPIO_Init() != 0) {
+		return -1;
 	}
-
-	// GPIO Config
-	DEV_GPIO_Init();
-	wiringPiSPISetup(0,10000000);
-	// wiringPiSPISetupMode(0, 32000000, 0);
+/* hjemmeskjerm: dod #elif USE_WIRINGPI_LIB-gren fjernet. Den ble aldri
+ * kompilert (USE_WIRINGPI_LIB defineres ikke av noen Makefile) og refererte
+ * wiringPi-symboler vi ikke lenker mot. */
 #elif  LGPIO
     char buffer[NUM_MAXBUF];
     FILE *fp;
@@ -271,11 +272,19 @@ UBYTE DEV_Module_Init(void)
         }
     }
     SPI_Handle = lgSpiOpen(0, 0, 12500000, 0);
-    DEV_GPIO_Init();
+    if (SPI_Handle < 0) {   /* hjemmeskjerm: var usjekket */
+        Debug("lgSpiOpen(/dev/spidev0.0) feilet: %d\n", SPI_Handle);
+        return -1;
+    }
+    if (DEV_GPIO_Init() != 0) {
+        return -1;
+    }
 #elif GPIOD
 	printf("Write and read /dev/spidev0.0 \r\n");
     GPIOD_Export();
-	DEV_GPIO_Init();
+	if (DEV_GPIO_Init() != 0) {
+		return -1;
+	}
 	DEV_HARDWARE_SPI_begin("/dev/spidev0.0");
     DEV_HARDWARE_SPI_setSpeed(12500000);
 #endif

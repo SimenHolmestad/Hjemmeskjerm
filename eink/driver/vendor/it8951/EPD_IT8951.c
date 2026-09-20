@@ -29,6 +29,7 @@
 #
 ******************************************************************************/
 #include "EPD_IT8951.h"
+#include "epd_host.h"   /* hjemmeskjerm */
 #include <time.h>
 
 //basic mode definition
@@ -58,13 +59,30 @@ parameter:
 ******************************************************************************/
 static void EPD_IT8951_ReadBusy(void)
 {
-	// Debug("Busy ------\r\n");
-    UBYTE Busy_State = DEV_Digital_Read(EPD_BUSY_PIN);
+    /* hjemmeskjerm: original var en naken while-loop uten timeout og uten
+     * sleep. En frakoblet eller strømløs HAT hang prosessen for alltid paa
+     * 100% CPU. Rask vei foerst - denne kalles foer hver eneste overfoering. */
     //0: busy, 1: idle
-    while(Busy_State == 0) {
-        Busy_State = DEV_Digital_Read(EPD_BUSY_PIN);
+    if (DEV_Digital_Read(EPD_BUSY_PIN) != 0) {
+        return;
     }
-	// Debug("Busy Release ------\r\n");
+
+    struct timespec t0, now;
+    unsigned spins = 0;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
+    while (DEV_Digital_Read(EPD_BUSY_PIN) == 0) {
+        if (++spins > 2000) {
+            DEV_Delay_us(100);
+            clock_gettime(CLOCK_MONOTONIC, &now);
+            long ms = (now.tv_sec - t0.tv_sec) * 1000L
+                    + (now.tv_nsec - t0.tv_nsec) / 1000000L;
+            if (ms > EPD_BUSY_TIMEOUT_MS) {
+                EPD_Host_Fatal("tidsavbrudd mens vi ventet paa BUSY (%ld ms). "
+                               "Sjekk stroem, FPC-kabel og SPI-oppsett.", ms);
+            }
+        }
+    }
 }
 
 
@@ -377,12 +395,26 @@ static void EPD_IT8951_SetTargetMemoryAddr(UDOUBLE Target_Memory_Addr)
 function :	EPD_IT8951_WaitForDisplayReady
 parameter:  
 ******************************************************************************/
-static void EPD_IT8951_WaitForDisplayReady(void)
+/* hjemmeskjerm: var `static`, selv om EPD_IT8951.h alltid har erklaert den
+ * uten static. Vi maa kalle den utenfra: de vanlige refresh-funksjonene venter
+ * bare FOER de skriver, saa de returnerer mens panelet fortsatt oppdaterer.
+ * Timeout lagt til av samme grunn som i ReadBusy. */
+void EPD_IT8951_WaitForDisplayReady(void)
 {
+    struct timespec t0, now;
+    clock_gettime(CLOCK_MONOTONIC, &t0);
+
     //Check IT8951 Register LUTAFSR => NonZero Busy, Zero - Free
     while( EPD_IT8951_ReadReg(LUTAFSR) )
     {
-        //wait in idle state
+        /* Hver runde er en full SPI-registerlesing, saa her sover vi alltid. */
+        DEV_Delay_ms(10);
+        clock_gettime(CLOCK_MONOTONIC, &now);
+        long ms = (now.tv_sec - t0.tv_sec) * 1000L
+                + (now.tv_nsec - t0.tv_nsec) / 1000000L;
+        if (ms > EPD_DISPLAY_TIMEOUT_MS) {
+            EPD_Host_Fatal("panelet ble aldri ferdig med aa oppdatere (%ld ms)", ms);
+        }
     }
 }
 
@@ -697,6 +729,9 @@ void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Add
 
     UDOUBLE ImageSize = ((Dev_Info.Panel_W * 4 % 8 == 0)? (Dev_Info.Panel_W * 4 / 8 ): (Dev_Info.Panel_W * 4 / 8 + 1)) * Dev_Info.Panel_H;
     UBYTE* Frame_Buf = malloc (ImageSize);
+    if (Frame_Buf == NULL) {   /* hjemmeskjerm: var usjekket */
+        EPD_Host_Fatal("tom for minne (%lu byte til rammebuffer)", (unsigned long)ImageSize);
+    }
     memset(Frame_Buf, 0xFF, ImageSize);
 
 

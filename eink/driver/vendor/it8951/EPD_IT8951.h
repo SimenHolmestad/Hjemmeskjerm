@@ -33,7 +33,7 @@
 
 #include <stdbool.h>
 
-#include "../Config/DEV_Config.h"
+#include "DEV_Config.h"   /* hjemmeskjerm: flat vendor-mappe */
 
 
 // INIT mode, for every init or some time after A2 mode refresh
@@ -191,6 +191,11 @@ void EPD_IT8951_Standby(void);
 void EPD_IT8951_Sleep(void);
 
 IT8951_Dev_Info EPD_IT8951_Init(UWORD VCOM);
+
+/* hjemmeskjerm: var bare erklaert inne i en utkommentert blokk lenger oppe,
+ * og definert `static` i .c-fila. Vi maa kunne vente paa at panelet blir
+ * ferdig etter en oppdatering, ikke bare foer den. */
+void EPD_IT8951_WaitForDisplayReady(void);
 
 void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Addr, UWORD Mode);
 
