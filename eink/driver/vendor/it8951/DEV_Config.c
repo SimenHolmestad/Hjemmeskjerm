@@ -30,10 +30,6 @@
 #include "DEV_Config.h"
 #include <fcntl.h>
 
-#if LGPIO
-int GPIO_Handle;
-int SPI_Handle;
-#endif
 
 /******************************************************************************
 function:	GPIO Write
@@ -42,13 +38,7 @@ Info:
 ******************************************************************************/
 void DEV_Digital_Write(UWORD Pin, UBYTE Value)
 {
-#ifdef BCM
 	bcm2835_gpio_write(Pin, Value);
-#elif  LGPIO  
-    lgGpioWrite(GPIO_Handle, Pin, Value);
-#elif GPIOD
-    GPIOD_Write(Pin, Value);
-#endif
 }
 
 /******************************************************************************
@@ -59,13 +49,7 @@ Info:
 UBYTE DEV_Digital_Read(UWORD Pin)
 {
 	UBYTE Read_Value = 0;
-#ifdef BCM
 	Read_Value = bcm2835_gpio_lev(Pin);
-#elif  LGPIO  
-    Read_Value = lgGpioRead(GPIO_Handle,Pin);
-#elif GPIOD
-    Read_Value = GPIOD_Read(Pin);
-#endif
 	return Read_Value;
 }
 
@@ -76,19 +60,7 @@ Info:
 ******************************************************************************/
 void DEV_SPI_WriteByte(UBYTE Value)
 {
-#ifdef BCM
 	bcm2835_spi_transfer(Value);
-#elif  LGPIO 
-    /* hjemmeskjerm: lgSpiXfer (full dupleks) i stedet for lgSpiWrite, slik at
-     * LGPIO oppfoerer seg som BCM-veien. bcm2835_spi_transfer() er full
-     * dupleks, og det er den veien panelet er verifisert paa her. */
-    {
-        char tx = (char)Value, rx = 0;
-        lgSpiXfer(SPI_Handle, &tx, &rx, 1);
-    }
-#elif GPIOD
-	DEV_HARDWARE_SPI_TransferByte(Value);
-#endif
 }
 
 /******************************************************************************
@@ -99,20 +71,7 @@ Info:
 UBYTE DEV_SPI_ReadByte()
 {
 	UBYTE Read_Value = 0x00;
-#ifdef BCM
 	Read_Value = bcm2835_spi_transfer(0x00);
-#elif  LGPIO 
-    /* hjemmeskjerm: var lgSpiRead, som bare mottar og lar MOSI staa i det
-     * kjernedriveren nå velger. IT8951 vil ha MOSI lav mens den klokker ut
-     * data, og det er nettopp det bcm2835_spi_transfer(0x00) gjoer. */
-    {
-        char tx = 0x00, rx = 0;
-        lgSpiXfer(SPI_Handle, &tx, &rx, 1);
-        Read_Value = (UBYTE)rx;
-    }
-#elif GPIOD
-	Read_Value = DEV_HARDWARE_SPI_TransferByte(0x00);
-#endif
 	return Read_Value;
 }
 
@@ -123,16 +82,7 @@ Info:
 ******************************************************************************/
 void DEV_Delay_ms(UDOUBLE xms)
 {
-#ifdef BCM
 	bcm2835_delay(xms);
-#elif  LGPIO  
-    lguSleep(xms/1000.0);
-#elif GPIOD
-	UDOUBLE i;
-	for(i=0; i < xms; i++) {
-		usleep(1000);
-	}
-#endif
 }
 
 
@@ -143,13 +93,7 @@ Info:
 ******************************************************************************/
 void DEV_Delay_us(UDOUBLE xus)
 {
-#ifdef BCM
 	bcm2835_delayMicroseconds(xus);
-#elif  LGPIO 
-    lguSleep(xus/1000000.0);
-#elif GPIOD
-	usleep(xus);
-#endif
 }
 
 
@@ -158,36 +102,11 @@ void DEV_Delay_us(UDOUBLE xus)
 **/
 static int DEV_GPIO_Mode(UWORD Pin, UWORD Mode)   /* hjemmeskjerm: var void */
 {
-#ifdef BCM
 	if(Mode == 0 || Mode == BCM2835_GPIO_FSEL_INPT) {
 		bcm2835_gpio_fsel(Pin, BCM2835_GPIO_FSEL_INPT);
 	} else {
 		bcm2835_gpio_fsel(Pin, BCM2835_GPIO_FSEL_OUTP);
 	}
-#elif  LGPIO  
-    /* hjemmeskjerm: returverdiene var usjekket. Kjernen kan allerede eie
-     * GPIO 8 (CS) via cs-gpios i device tree; da feiler claim, CS-skrivingene
-     * blir no-ops, og panelet far soppel uten at noe sier fra. Se README om
-     * dtoverlay=spi0-0cs. */
-    int lg_ret;
-    if(Mode == 0 || Mode == LG_SET_INPUT){
-        lg_ret = lgGpioClaimInput(GPIO_Handle,LFLAGS,Pin);
-    }else{
-        lg_ret = lgGpioClaimOutput(GPIO_Handle, LFLAGS, Pin, LG_LOW);
-    }
-    if (lg_ret < 0) {
-        Debug("lgGpioClaim feilet for pinne %d: %d\n", Pin, lg_ret);
-        return -1;
-    }
-#elif GPIOD
-	if(Mode == 0 || Mode == GPIOD_IN) {
-		GPIOD_Direction(Pin, GPIOD_IN);
-		// Debug("IN Pin = %d\r\n",Pin);
-	} else {
-		GPIOD_Direction(Pin, GPIOD_OUT);
-		// Debug("OUT Pin = %d\r\n",Pin);
-	}
-#endif
 	return 0;   /* hjemmeskjerm */
 }
 
@@ -198,27 +117,12 @@ static int DEV_GPIO_Mode(UWORD Pin, UWORD Mode)   /* hjemmeskjerm: var void */
 /* hjemmeskjerm: var `static void`, og slukte feil fra DEV_GPIO_Mode. */
 static int DEV_GPIO_Init(void)
 {
-#ifdef BCM
 	if (DEV_GPIO_Mode(EPD_RST_PIN, BCM2835_GPIO_FSEL_OUTP) != 0) return -1;
 	if (DEV_GPIO_Mode(EPD_CS_PIN, BCM2835_GPIO_FSEL_OUTP) != 0) return -1;
 	if (DEV_GPIO_Mode(EPD_BUSY_PIN, BCM2835_GPIO_FSEL_INPT) != 0) return -1;
 
 	DEV_Digital_Write(EPD_CS_PIN, HIGH);
 
-#elif LGPIO
-	if (DEV_GPIO_Mode(EPD_BUSY_PIN, 0) != 0) return -1;
-	if (DEV_GPIO_Mode(EPD_RST_PIN, 1) != 0) return -1;
-	if (DEV_GPIO_Mode(EPD_CS_PIN, 1) != 0) return -1;
-
-    DEV_Digital_Write(EPD_CS_PIN, 1);
-
-#elif GPIOD
-	if (DEV_GPIO_Mode(EPD_BUSY_PIN, 0) != 0) return -1;
-	if (DEV_GPIO_Mode(EPD_RST_PIN, 1) != 0) return -1;
-	if (DEV_GPIO_Mode(EPD_CS_PIN, 1) != 0) return -1;
-
-    DEV_Digital_Write(EPD_CS_PIN, 1);
-#endif
 	return 0;
 }
 
@@ -233,7 +137,6 @@ UBYTE DEV_Module_Init(void)
 {
     Debug("/***********************************/ \r\n");
 
-#ifdef BCM
 	/* hjemmeskjerm: bcm2835 trenger root for SPI. Uten root faller
 	 * bcm2835_init() tilbake til /dev/gpiomem og returnerer SUKSESS, men
 	 * lar SPI-registerpekeren staa som NULL - og da segfaulter
@@ -241,9 +144,8 @@ UBYTE DEV_Module_Init(void)
 	 * hva som er galt i stedet for et kraesj. */
 	if (geteuid() != 0) {
 		fprintf(stderr,
-			"epaper: bygget med LIB=BCM, som krever root. Kjor med sudo,\n"
-			"        eller bygg med LGPIO (make clean && make) og legg\n"
-			"        brukeren i gruppene gpio og spi.\n");
+			"epaper: dette programmet krever root, fordi bcm2835 trenger\n"
+			"        /dev/mem for SPI. Kjor med sudo.\n");
 		return 1;
 	}
 	if(!bcm2835_init()) {
@@ -268,57 +170,6 @@ UBYTE DEV_Module_Init(void)
 /* hjemmeskjerm: dod #elif USE_WIRINGPI_LIB-gren fjernet. Den ble aldri
  * kompilert (USE_WIRINGPI_LIB defineres ikke av noen Makefile) og refererte
  * wiringPi-symboler vi ikke lenker mot. */
-#elif  LGPIO
-    char buffer[NUM_MAXBUF];
-    FILE *fp;
-
-    fp = popen("cat /proc/cpuinfo | grep 'Raspberry Pi 5'", "r");
-    if (fp == NULL) {
-        Debug("It is not possible to determine the model of the Raspberry PI\n");
-        return -1;
-    }
-
-    if(fgets(buffer, sizeof(buffer), fp) != NULL)
-    {
-        Debug("apner gpiochip4 (Raspberry Pi 5)\n");
-        GPIO_Handle = lgGpiochipOpen(4);
-        if (GPIO_Handle < 0)
-        {
-            Debug( "gpiochip4 Export Failed\n");
-            return -1;
-        }
-    }
-    else
-    {
-        Debug("apner gpiochip0\n");
-        GPIO_Handle = lgGpiochipOpen(0);
-        if (GPIO_Handle < 0)
-        {
-            Debug( "gpiochip0 Export Failed\n");
-            return -1;
-        }
-    }
-    /* hjemmeskjerm: var hardkodet 12,5 MHz. BCM-veien kjorer paa
-     * 250MHz/32 = 7,8 MHz paa en Pi 3, og det er den farten panelet er
-     * verifisert paa her. Settes med `make SPI_HZ=...`. */
-    Debug("lgSpiOpen(spidev0.0) @ %d Hz\n", EPAPER_SPI_HZ);
-    SPI_Handle = lgSpiOpen(0, 0, EPAPER_SPI_HZ, 0);
-    if (SPI_Handle < 0) {   /* hjemmeskjerm: var usjekket */
-        Debug("lgSpiOpen(/dev/spidev0.0) feilet: %d\n", SPI_Handle);
-        return -1;
-    }
-    if (DEV_GPIO_Init() != 0) {
-        return -1;
-    }
-#elif GPIOD
-	printf("Write and read /dev/spidev0.0 \r\n");
-    GPIOD_Export();
-	if (DEV_GPIO_Init() != 0) {
-		return -1;
-	}
-	DEV_HARDWARE_SPI_begin("/dev/spidev0.0");
-    DEV_HARDWARE_SPI_setSpeed(12500000);
-#endif
 
     Debug("/***********************************/ \r\n");
 	return 0;
@@ -333,23 +184,9 @@ Info:
 ******************************************************************************/
 void DEV_Module_Exit(void)
 {
-#ifdef BCM
 	DEV_Digital_Write(EPD_CS_PIN, LOW);
 	DEV_Digital_Write(EPD_RST_PIN, LOW);
 
 	bcm2835_spi_end();
 	bcm2835_close();
-#elif LGPIO 
-    // DEV_Digital_Write(EPD_CS_PIN, 0);
-	// DEV_Digital_Write(EPD_RST_PIN, 0);
-    // lgSpiClose(SPI_Handle);
-    // lgGpiochipClose(GPIO_Handle);
-#elif GPIOD
-	DEV_HARDWARE_SPI_end();
-	DEV_Digital_Write(EPD_CS_PIN, 0);
-	DEV_Digital_Write(EPD_RST_PIN, 0);
-    GPIOD_Unexport(EPD_RST_PIN);
-    GPIOD_Unexport(EPD_BUSY_PIN);
-    GPIOD_Unexport_GPIO();
-#endif
 }

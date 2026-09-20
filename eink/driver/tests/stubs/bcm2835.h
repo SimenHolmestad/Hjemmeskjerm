@@ -1,5 +1,5 @@
 /* Stubb av bcm2835.h, KUN for syntakssjekk på en maskin uten libbcm2835.
- * Lenker ingenting; brukes av `make check LIB=BCM`. */
+ * Lenker ingenting; brukes av `make check`. */
 #ifndef __BCM2835_STUB_H
 #define __BCM2835_STUB_H
 

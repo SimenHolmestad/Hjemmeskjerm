@@ -57,7 +57,8 @@ static void install_signals(void)
     struct sigaction sa;
     memset(&sa, 0, sizeof sa);
     sa.sa_handler = handler;
-    /* SA_RESTART: uten den ville EINTR bryte ioctl-ene lgpio gjør. */
+    /* SA_RESTART: uten den ville EINTR kunne bryte systemkall midt i en
+     * overføring. */
     sa.sa_flags = SA_RESTART;
     sigaction(SIGINT, &sa, NULL);
     sigaction(SIGTERM, &sa, NULL);

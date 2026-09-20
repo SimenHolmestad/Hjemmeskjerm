@@ -12,9 +12,9 @@ WorkingDirectory=/home/simen/Hjemmeskjerm/eink/render
 ExecStart=/home/simen/Hjemmeskjerm/eink/render/.venv/bin/python render.py
 Restart=always
 RestartSec=30
-# Med LGPIO trengs ingen root, bare medlemskap i gruppene gpio og spi.
-# Bygger du med LIB=BCM må dette kjøres som root i stedet.
-SupplementaryGroups=gpio spi
+# Kjører som vanlig bruker. epaper krever root og kalles gjennom sudo
+# (use_sudo i eink.toml), slik at nettleseren ikke kjører privilegert.
+# Krever regla i /etc/sudoers.d/epaper – se README.
 # render.py holder chromium i live mellom rundene; ta med hele treet ved stopp.
 KillMode=mixed
 TimeoutStopSec=30

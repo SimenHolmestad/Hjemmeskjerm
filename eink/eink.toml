@@ -36,10 +36,10 @@ init_clear_every = 20
 [paths]
 # Relative stier regnes ut fra mappa denne fila ligger i.
 epaper  = "driver/epaper"
-# Et BCM-bygg krever root, og render.py kjører som vanlig bruker. Sett denne
-# til true for å kalle epaper gjennom sudo. Krever en sudoers-regel – se
-# README. Trengs ikke med et LGPIO-bygg.
-use_sudo = false
+# epaper krever root (bcm2835 bruker /dev/mem), mens render.py kjører som
+# vanlig bruker. Kaller derfor epaper gjennom sudo. Krever en sudoers-regel
+# – se README.
+use_sudo = true
 frame   = "frame.bmp"
 # Et display-kall kan ta over et minutt, siden driveren skriver SPI byte for
 # byte. Timeouten er sikkerhetsnettet mot at det henger helt.

@@ -17,7 +17,7 @@ De beholder sine originale MIT-headere og sine engelske kommentarer.
 
 Resten av `Raspberry/` er utelatt med vilje. `GUI_Paint.c` og `GUI_BMPfile.c` er erstattet av
 våre egne `src/bmp.c` og `src/pack.c`; fontene, `example.c` og `examples/main.c` brukes ikke.
-`RPI_gpiod.c` og `dev_hardware_SPI.c` trengs bare for `LIB=GPIOD`, som vi ikke støtter.
+`RPI_gpiod.c` og `dev_hardware_SPI.c` hører til GPIOD-backenden, som vi ikke bruker.
 
 Utvalget er frittstående: `EPD_IT8951.c` og `DEV_Config.c` kaller bare `Debug`, `DEV_*` og
 libc. De rører verken `GUI_Paint`, `isColor`, `Four_Byte_Align` eller globalene som lå i
@@ -26,7 +26,21 @@ libc. De rører verken `GUI_Paint`, `isColor`, `Four_Byte_Align` eller globalene
 ## Våre endringer
 
 Alle endringer er merket med `/* hjemmeskjerm: ... */` i koden, slik at en diff mot upstream
-er lett å lese. Filene ble committet uendret først, så endringene ligger i egen commit.
+er lett å lese. Filene ble committet uendret først, så endringene ligger i egne commits.
+
+### `DEV_Config.c` / `DEV_Config.h`
+- **Bare BCM-backenden er beholdt.** Upstream har `#ifdef BCM / #elif LGPIO / #elif GPIOD` i
+  ti blokker. LGPIO ble lagt til av Waveshare for Pi 5 og fikk aldri panelet til å svare på
+  vår Pi 3 – `epaper info` kom gjennom oppsettet, men leste bare nuller, ved alle
+  SPI-frekvenser fra 12,5 MHz ned til 1 MHz og med full dupleks. GPIOD har vi aldri brukt.
+  Begge grenene er fjernet, sammen med `EPAPER_SPI_HZ`, `GPIO_Handle` og `SPI_Handle`.
+  Fila gikk fra 315 til ~190 linjer, og det er ikke lenger noen `-D<backend>` å huske.
+- Død `#elif USE_WIRINGPI_LIB`-gren fjernet. Den lå etter `#ifdef BCM`, `USE_WIRINGPI_LIB`
+  defineres aldri av noen Makefile, og den refererte wiringPi-symboler vi ikke lenker mot.
+- `DEV_Module_Init` sjekker `geteuid()` før `bcm2835_init()`. Uten root faller `bcm2835_init()`
+  tilbake til `/dev/gpiomem` og returnerer *suksess*, men lar SPI-registerpekeren stå som
+  NULL – og da segfaulter `bcm2835_spi_begin()` rett etterpå. Nå får man en forklaring.
+- `DEV_GPIO_Mode` returnerer `int` i stedet for `void`, og `DEV_GPIO_Init` propagerer feilen.
 
 ### `EPD_IT8951.c`
 - `EPD_IT8951_ReadBusy()` — timeout. Upstream spinner i en naken `while` uten timeout og uten
@@ -36,13 +50,6 @@ er lett å lese. Filene ble committet uendret først, så endringene ligger i eg
   `4bp_Refresh` returnerer mens panelet fortsatt oppdaterer.
 - `EPD_IT8951_Clear_Refresh()` — `malloc` sjekkes for NULL.
 
-### `DEV_Config.c`
-- Død `#elif USE_WIRINGPI_LIB`-gren fjernet. Den lå etter `#ifdef BCM`, `USE_WIRINGPI_LIB`
-  defineres aldri av noen Makefile, og den refererte wiringPi-symboler vi ikke lenker mot.
-- `lgSpiOpen()` og `lgGpioClaim*()` — returverdier sjekkes. Særlig viktig for GPIO 8 (CS):
-  kjernen kan allerede eie den pinnen via `cs-gpios` i device tree, og da ble feilen
-  tidligere slukt i stillhet slik at CS-styringen bare var en no-op.
-
 ### `Debug.h`
 - `Debug()` skriver til `stderr` i stedet for `stdout`, og er stille med mindre
   `Debug_Enabled` er satt. `epaper info` skriver `key=value` til stdout, og den må ikke
@@ -50,7 +57,8 @@ er lett å lese. Filene ble committet uendret først, så endringene ligger i eg
 
 ### `EPD_IT8951.h`
 - Inkluderingssti flatet ut (`"../Config/DEV_Config.h"` → `"DEV_Config.h"`).
-- Prototype for `EPD_IT8951_WaitForDisplayReady()`.
+- Prototype for `EPD_IT8951_WaitForDisplayReady()`. Upstream har den bare inne i en
+  utkommentert blokk, samtidig som funksjonen er `static` i `.c`-fila.
 
 ### `epd_host.h`
 Ny fil, ikke fra Waveshare. Den ene krok-headeren vendret kode inkluderer, slik at vi slipper
