@@ -15,10 +15,12 @@ import io
 import logging
 import os
 import signal
+import socket
 import subprocess
 import sys
 import time
 import tomllib
+import urllib.parse
 from pathlib import Path
 
 from PIL import Image
@@ -68,6 +70,9 @@ class Config:
         lokke = raw.get("loop", {})
         self.intervall = float(lokke.get("interval_seconds", 300))
         self.init_clear_hver = int(lokke.get("init_clear_every", 20))
+
+        # Brukes bare til å gi en nyttig feilmelding når serveren er nede.
+        self.webpage_dir = (rot.parent / "webpage").resolve()
 
         stier = raw.get("paths", {})
         self.epaper = (rot / stier.get("epaper", "driver/epaper")).resolve()
@@ -133,6 +138,38 @@ def kall_epaper(cfg: Config, *args: str) -> None:
         stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True,
     )
     log.debug("%s tok %.1f s", args[0], time.monotonic() - start)
+
+
+def vent_på_server(url: str, budsjett: float) -> bool:
+    """Venter til noen svarer på verten og porten i url. True hvis de gjør det.
+
+    Sjekken gjøres før chromium startes – å starte nettleseren tar snaue 20
+    sekunder på en Pi 3, og det er bortkastet hvis det ikke er noe å hente.
+
+    Budsjettet er kort ved --once (da står du og venter på svar) og langt i
+    løkkemodus, der systemd kan ha startet oss før vite rekker å lytte.
+    After= i unit-fila sier bare når prosessen ble startet, ikke når den er
+    klar til å ta imot.
+    """
+    deler = urllib.parse.urlsplit(url)
+    vert = deler.hostname or "localhost"
+    port = deler.port or (443 if deler.scheme == "https" else 80)
+
+    frist = time.monotonic() + budsjett
+    sagt_fra = False
+    while not _stopp:
+        try:
+            with socket.create_connection((vert, port), timeout=2):
+                return True
+        except OSError:
+            pass
+        if time.monotonic() >= frist:
+            return False
+        if not sagt_fra and budsjett > 10:
+            log.info("ingen svarer på %s:%d ennå – venter", vert, port)
+            sagt_fra = True
+        time.sleep(1)
+    return False
 
 
 class Nettleser:
@@ -239,9 +276,26 @@ def main() -> int:
     signal.signal(signal.SIGTERM, _be_om_stopp)
     signal.signal(signal.SIGINT, _be_om_stopp)
 
+    # Kort budsjett ved --once, langt i løkkemodus: der kan systemd ha startet
+    # oss før vite rekker å lytte.
+    if not vent_på_server(cfg.url, 5.0 if args.once else 180.0):
+        port = urllib.parse.urlsplit(cfg.url).port or 80
+        log.error("ingen svarer på %s", cfg.url)
+        log.error("Nettsida må kjøre først. Start den med:")
+        log.error("    cd %s && pnpm preview --port %d", cfg.webpage_dir, port)
+        log.error("eller, hvis tjenesten er satt opp:")
+        log.error("    sudo systemctl start hjemmeskjerm-web")
+        return 1
+
     lut = bygg_lut(cfg.gamma, cfg.kontrast)
     nettleser = Nettleser(cfg)
-    nettleser.start()
+    try:
+        nettleser.start()
+    except Exception as e:
+        log.error("klarte ikke starte nettleseren: %s", e)
+        log.debug("detaljer", exc_info=True)
+        nettleser.stopp()
+        return 1
 
     runde = 0
     feil_på_rad = 0

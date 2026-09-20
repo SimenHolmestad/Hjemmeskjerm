@@ -8,8 +8,8 @@ Wants=hjemmeskjerm-web.service
 [Service]
 Type=simple
 User=simen
-WorkingDirectory=/home/simen/hjemmeskjerm/eink/render
-ExecStart=/home/simen/hjemmeskjerm/eink/render/.venv/bin/python render.py
+WorkingDirectory=/home/simen/Hjemmeskjerm/eink/render
+ExecStart=/home/simen/Hjemmeskjerm/eink/render/.venv/bin/python render.py
 Restart=always
 RestartSec=30
 # Med LGPIO trengs ingen root, bare medlemskap i gruppene gpio og spi.

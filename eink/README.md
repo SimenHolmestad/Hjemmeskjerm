@@ -25,7 +25,7 @@ Interface Options → SPI).
 sudo apt install liblgpio-dev chromium python3-venv
 sudo usermod -aG gpio,spi $USER     # logg ut og inn etterpå
 
-cd ~/hjemmeskjerm/eink/driver && make
+cd ~/Hjemmeskjerm/eink/driver && make
 cd ../render && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
 
 cd ../../webpage && pnpm install && pnpm build
@@ -42,12 +42,26 @@ Bygg med `LIB=BCM` først. Det er den varianten som allerede er kjent å virke p
 maskinvaren, så får du bildet riktig én gang før du bytter til LGPIO.
 
 ```sh
-cd ~/hjemmeskjerm/eink/driver && make LIB=BCM
+cd ~/Hjemmeskjerm/eink/driver && make LIB=BCM
 
 sudo ./epaper info     # leser bare enhetsinfo, rører ikke panelet
 sudo ./epaper clear    # skal bli hvitt
-cd ../render && .venv/bin/python render.py --once -v
 ```
+
+Nettsida må kjøre før `render.py` har noe å ta bilde av. I et eget skall:
+
+```sh
+cd ~/Hjemmeskjerm/webpage && pnpm preview --port 4173
+```
+
+og så, i det første:
+
+```sh
+cd ~/Hjemmeskjerm/eink/render && .venv/bin/python render.py --once -v
+```
+
+(`render.py` sjekker at noen svarer på porten før den starter chromium, så du får en
+forståelig feilmelding og ikke et kræsj hvis du glemmer det.)
 
 **`sudo` er ikke valgfritt når man bygger med BCM.** bcm2835 trenger `/dev/mem` for SPI.
 Uten root faller `bcm2835_init()` tilbake til `/dev/gpiomem` og returnerer *suksess*, men
@@ -69,7 +83,7 @@ Er bildet **speilvendt**, er det pakkingen i `driver/src/pack.c` som står feil 
 
 ## Kjør som tjeneste
 
-Unit-filene i [`systemd/`](systemd) er skrevet for `/home/simen/hjemmeskjerm` og brukeren
+Unit-filene i [`systemd/`](systemd) er skrevet for `/home/simen/Hjemmeskjerm` og brukeren
 `simen`. Endre `User=` og stiene om det er annerledes hos deg.
 
 ```sh
