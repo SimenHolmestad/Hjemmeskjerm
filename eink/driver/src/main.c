@@ -31,12 +31,10 @@
  * IT8951 har flere LUT-motorer og tegner dem samtidig, så en porsjon koster
  * én bølgeform og gir ett blink uansett hvor mange den inneholder.
  *
- * Hvor mange motorer panelet har står ikke i noe vi har, og fyrer vi av flere
- * enn det er ledige, er faren at en oppdatering forsvinner uten å si fra – da
- * står det noe gammelt på skjermen som hurtiglageret mener er riktig. Derfor
- * går de i porsjoner, og derfor er tallet holdt innenfor det som er prøvd mot
- * panelet. Den er like stor som DIFF_MAKS_REKT, så det normalt blir én
- * porsjon og dermed ett blink. */
+ * Hvor mange motorer panelet har står ikke i noe vi kan lese. Registerkartet
+ * i EPD_IT8951.h peker mot seksten, men så mange tåler ikke vårt panel: over
+ * åtte blir deler av skjermen rotete. Åtte gir rene rektangler. Den er like
+ * stor som DIFF_MAKS_REKT, så det normalt blir én porsjon og ett blink. */
 #define SAMTIDIGE 8
 
 _Static_assert(DIFF_MAKS_REKT <= SAMTIDIGE,

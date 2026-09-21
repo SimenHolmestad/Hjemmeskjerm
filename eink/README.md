@@ -235,13 +235,15 @@ uansett måtte vente. Målt på vårt panel med ni rektangler gikk det likevel f
 sekunder til omtrent tre, og av de tre er det meste oppstart. Ni bølgeformer ble til én.
 
 `SAMTIDIGE` i `src/main.c` er hvor mange som fyres av før vi venter igjen. Den finnes fordi
-antallet LUT-motorer ikke står i noe vi har: fyrer man av flere enn det er ledige, er faren at
-en oppdatering forsvinner uten å si fra, og da står det noe gammelt på skjermen som
-hurtiglageret mener er riktig. Åtte er innenfor det som er prøvd mot panelet.
-`DIFF_MAKS_REKT` i `src/diff.h` holdes lik, så en oppdatering normalt blir én porsjon og
-dermed ett blink; et `_Static_assert` passer på at de ikke kommer i utakt. Vil du opp, hev
-begge sammen og se etter
-rektangler som blir stående uoppdaterte – `--full` retter opp igjen.
+antallet LUT-motorer ikke står i noe vi kan lese. Registerkartet peker mot seksten –
+`LUT0`-registrene ligger med 0x40 i steg, og `LUTAFSR` er status for alle sammen – men så
+mange tåler ikke vårt panel: over åtte blir deler av skjermen rotete. Åtte gir rene
+rektangler. `DIFF_MAKS_REKT` i `src/diff.h` holdes lik, så en oppdatering normalt blir én
+porsjon og dermed ett blink; et `_Static_assert` passer på at de ikke kommer i utakt.
+
+Blir deler av skjermen rotete, eller blir rektangler stående uoppdaterte, er tallet for høyt
+for panelet. Da er hurtiglageret i tillegg blitt feil, siden det mener skjermen er riktig
+tegnet, og `--full` retter det opp. Senk begge tallene sammen.
 
 Registerlesing duger ikke til å finne grensa – `EPD_IT8951_ReadReg` går selv gjennom
 `WriteCommand` → `ReadBusy`, så et forsøk på å lese `LUTAFSR` underveis ville serialisert
