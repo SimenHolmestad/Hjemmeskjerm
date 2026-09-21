@@ -11,9 +11,10 @@ typedef struct { uint16_t x, y, w, h; } rect_t;
  * 16 gir litt margin samtidig som 1872 går opp i det. */
 #define DIFF_TILE 16
 
-/* Flere rektangler enn dette lønner seg ikke: hvert av dem koster en egen
- * oppdatering av panelet. Da er det billigere å tegne den omsluttende boksen. */
-#define DIFF_MAKS_REKT 12
+/* Så mange rektangler fyrer panelet av på én gang, og en slik porsjon koster
+ * én bølgeform og gir ett blink. Flere ville krevd en porsjon til, altså et
+ * blink til – se SAMTIDIGE i main.c, som denne skal holde seg innenfor. */
+#define DIFF_MAKS_REKT 8
 
 /* Dekker rektanglene mer enn dette av skjermen, tegner vi alt. */
 #define DIFF_FULL_PROSENT 50

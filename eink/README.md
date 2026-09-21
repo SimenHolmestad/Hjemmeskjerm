@@ -193,11 +193,14 @@ på bytegrenser, og `render.py` slipper å vite noe om det hele. Rutenettet er 1
 det IT8951 krever av `Area_X` og `Area_W` i 4bpp, og 1872 går opp i 16. Logikken ligger i
 `src/diff.c` og testes av `make test`.
 
-Blir det flere enn tolv rektangler, slås de nærmeste sammen to og to til det er tolv igjen –
-det paret som koster minst i unødvendig tegnet areal først. Det er viktig at det er *naboer*
+Blir det flere rektangler enn panelet tegner på én gang, slås de nærmeste sammen to og to til
+det er få nok igjen – det paret som koster minst i unødvendig tegnet areal først. Det er
+viktig at det er *naboer*
 som slås sammen: tar man i stedet den omsluttende boksen rundt alt, blir en endring øverst og
 en nederst til en oppdatering av hele skjermen. Dekker rektanglene til slutt mer enn halve
-skjermen, tegnes alt likevel – én full oppdatering er da billigere enn tolv.
+skjermen, tegnes alt likevel. Til slutt forenes rektangler som overlapper hverandre: en
+omsluttende boks kan legge seg over et rektangel som ikke var med i sammenslåinga, og da ville
+det samme området blitt tegnet to ganger.
 
 `epaper display` skriver `rects=` og `area_pct=` til stdout, og `render.py` logger det hver
 runde. Blinker skjermen mer enn ventet, er det de to tallene man skal se på. `-v` lister hvert
@@ -219,6 +222,30 @@ sudo ./epaper display ../frame.bmp --full --mode gl16
 
 En bølgeform firmwaren ikke har gir ingen feilmelding, så dette må ses på: forvent enten et
 uendret panel eller et forvrengt bilde.
+
+**Rektanglene tegnes samtidig.** Hvert rektangel koster en hel bølgeform, og bølgeformen er
+også det synlige blinket – tegner man dem etter hverandre, blir ni rektangler til ni blink som
+ruller over skjermen. IT8951 har flere LUT-motorer og kan tegne flere områder på én gang, så
+`epaper` laster inn alle rektanglene først og fyrer så av alle `DPY_BUF_AREA`-kommandoene uten
+å vente imellom. Da koster de til sammen én bølgeform og gir ett blink.
+
+Det er ikke opplagt at det virker: `EPD_IT8951_WriteCommand` kaller `ReadBusy()` foran hver
+kommando, og HRDY holdes lav mens panelet oppdaterer, så man skulle tro at neste kommando
+uansett måtte vente. Målt på vårt panel med ni rektangler gikk det likevel fra omtrent sju
+sekunder til omtrent tre, og av de tre er det meste oppstart. Ni bølgeformer ble til én.
+
+`SAMTIDIGE` i `src/main.c` er hvor mange som fyres av før vi venter igjen. Den finnes fordi
+antallet LUT-motorer ikke står i noe vi har: fyrer man av flere enn det er ledige, er faren at
+en oppdatering forsvinner uten å si fra, og da står det noe gammelt på skjermen som
+hurtiglageret mener er riktig. Åtte er innenfor det som er prøvd mot panelet.
+`DIFF_MAKS_REKT` i `src/diff.h` holdes lik, så en oppdatering normalt blir én porsjon og
+dermed ett blink; et `_Static_assert` passer på at de ikke kommer i utakt. Vil du opp, hev
+begge sammen og se etter
+rektangler som blir stående uoppdaterte – `--full` retter opp igjen.
+
+Registerlesing duger ikke til å finne grensa – `EPD_IT8951_ReadReg` går selv gjennom
+`WriteCommand` → `ReadBusy`, så et forsøk på å lese `LUTAFSR` underveis ville serialisert
+nettopp det man prøver å måle. Klokka og skjermen er de eneste brukbare instrumentene.
 
 **Ghosting.** Hver 60. runde – en halvtime – kjøres `clear --mode init` først. Juster med
 `init_clear_every` i `eink.toml`, eller sett den til 0 for å skru det av. Bruker du `a2` for

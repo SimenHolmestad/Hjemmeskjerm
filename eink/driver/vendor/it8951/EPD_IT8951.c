@@ -625,7 +625,10 @@ static void EPD_IT8951_Display_Area(UWORD X,UWORD Y,UWORD W,UWORD H,UWORD Mode)
 function :	EPD_IT8951_Display_AreaBuf
 parameter:  
 ******************************************************************************/
-static void EPD_IT8951_Display_AreaBuf(UWORD X,UWORD Y,UWORD W,UWORD H,UWORD Mode, UDOUBLE Target_Memory_Addr)
+/* hjemmeskjerm: var `static`. Vi maa kunne fyre av en omraadeoppdatering uten
+ * aa laste bildedata i samme slengen, for aa finne ut om panelet kan tegne
+ * flere omraader samtidig. */
+void EPD_IT8951_Display_AreaBuf(UWORD X,UWORD Y,UWORD W,UWORD H,UWORD Mode, UDOUBLE Target_Memory_Addr)
 {
     UWORD Args[7];
     Args[0] = X;
@@ -910,16 +913,16 @@ void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
 
 
 /******************************************************************************
-function :	EPD_IT8951_4bp_Refresh
+function :	EPD_IT8951_4bp_Load
 parameter:  
 ******************************************************************************/
-/* hjemmeskjerm: Mode lagt til som parameter. */
-void EPD_IT8951_4bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, UWORD Mode, bool Packed_Write)
+/* hjemmeskjerm: lastinga alene, uten a fyre av oppdateringen og uten a vente.
+ * Ventinga ligger hos den som kaller, slik at flere omrader kan lastes og
+ * sendes av garde samtidig. */
+void EPD_IT8951_4bp_Load(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, UDOUBLE Target_Memory_Addr, bool Packed_Write)
 {
     IT8951_Load_Img_Info Load_Img_Info;
     IT8951_Area_Img_Info Area_Img_Info;
-
-    EPD_IT8951_WaitForDisplayReady();
 
     Load_Img_Info.Source_Buffer_Addr = Frame_Buf;
     Load_Img_Info.Endian_Type = IT8951_LDIMG_L_ENDIAN;
@@ -933,15 +936,6 @@ void EPD_IT8951_4bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
     Area_Img_Info.Area_H = H;
 
     EPD_IT8951_HostAreaPackedPixelWrite_4bp(&Load_Img_Info, &Area_Img_Info, Packed_Write);
-
-    if(Hold == true)
-    {
-        EPD_IT8951_Display_Area(X,Y,W,H, Mode);
-    }
-    else
-    {
-        EPD_IT8951_Display_AreaBuf(X,Y,W,H, Mode,Target_Memory_Addr);
-    }
 }
 
 

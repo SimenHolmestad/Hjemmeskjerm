@@ -27,6 +27,21 @@
 #include "EPD_IT8951.h"
 #include "epd_host.h"
 
+/* Hvor mange områdeoppdateringer vi fyrer av før vi venter på panelet igjen.
+ * IT8951 har flere LUT-motorer og tegner dem samtidig, så en porsjon koster
+ * én bølgeform og gir ett blink uansett hvor mange den inneholder.
+ *
+ * Hvor mange motorer panelet har står ikke i noe vi har, og fyrer vi av flere
+ * enn det er ledige, er faren at en oppdatering forsvinner uten å si fra – da
+ * står det noe gammelt på skjermen som hurtiglageret mener er riktig. Derfor
+ * går de i porsjoner, og derfor er tallet holdt innenfor det som er prøvd mot
+ * panelet. Den er like stor som DIFF_MAKS_REKT, så det normalt blir én
+ * porsjon og dermed ett blink. */
+#define SAMTIDIGE 8
+
+_Static_assert(DIFF_MAKS_REKT <= SAMTIDIGE,
+               "flere rektangler enn vi fyrer av om gangen gir mer enn ett blink");
+
 /* Slås på med -v eller EPAPER_DEBUG=1. Leses av Debug()-makroen i vendret kode. */
 int Debug_Enabled = 0;
 
@@ -199,22 +214,24 @@ static void lagre_hvitt_hurtiglager(IT8951_Dev_Info info)
     free(hvitt);
 }
 
-/* Sender ett rektangel til panelet. Dekker det hele bredden, ligger radene
- * allerede etter hverandre i det pakkede bufferet, og da trengs ingen kopi. */
-static void vis_rekt(const uint8_t *pakket, uint16_t w, const rect_t *r,
-                     UWORD mode, UDOUBLE target, int packed_write, uint8_t *bit)
+/* Peker til rektangelets piksler, tett pakket slik driveren leser dem. Dekker
+ * rektangelet hele bredden, ligger radene allerede etter hverandre i det
+ * pakkede bufferet, og da trengs ingen kopi. */
+static const uint8_t *rekt_piksler(const uint8_t *pakket, uint16_t w,
+                                   const rect_t *r, uint8_t *bit)
 {
-    const uint8_t *kilde;
+    if (r->x == 0 && r->w == w) return pakket + (size_t)r->y * (w / 2);
+    diff_slice(pakket, w, r, bit);
+    return bit;
+}
 
-    if (r->x == 0 && r->w == w) {
-        kilde = pakket + (size_t)r->y * (w / 2);
-    } else {
-        diff_slice(pakket, w, r, bit);
-        kilde = bit;
-    }
-
-    EPD_IT8951_4bp_Refresh((UBYTE *)kilde, r->x, r->y, r->w, r->h,
-                           false, target, mode, packed_write ? true : false);
+/* Bare lastinga, uten å fyre av oppdateringen og uten å vente. */
+static void last_rekt(const uint8_t *pakket, uint16_t w, const rect_t *r,
+                      UDOUBLE target, int packed_write, uint8_t *bit)
+{
+    const uint8_t *kilde = rekt_piksler(pakket, w, r, bit);
+    EPD_IT8951_4bp_Load((UBYTE *)kilde, r->x, r->y, r->w, r->h,
+                        target, packed_write ? true : false);
 }
 
 int main(int argc, char **argv)
@@ -439,15 +456,26 @@ int main(int argc, char **argv)
     /* Hurtiglageret kastes før første rektangel går ut, uansett flagg: fra nå
      * av vet ingen hva som står på skjermen før alle rektanglene har gått ut.
      * Blir vi avbrutt, eller gir panelet opp underveis, finner neste runde
-     * ingen fil og tegner alt på nytt – bedre enn en fil som lyver.
-     *
-     * 4bp_Refresh venter på panelet før den skriver, så rektanglene stiller
-     * seg selv i kø. Den siste ventinga tar vi under, som før. */
+     * ingen fil og tegner alt på nytt – bedre enn en fil som lyver. */
     state_drop();
 
-    for (int i = 0; i < n; i++) {
-        avbrutt_hvis_bedt_om();
-        vis_rekt(pakket, info.Panel_W, &rekt[i], mode, target, packed_write, bit);
+    /* Alle rektanglene i en porsjon lastes inn først – ingen oppdatering er
+     * startet ennå, så ingen bølgeform leser minnet vi skriver til – og så
+     * fyres alle DPY_BUF_AREA av etter hverandre uten å vente imellom.
+     * Panelet tegner dem samtidig, så en porsjon koster én bølgeform og gir
+     * ett blink, uansett hvor mange rektangler den inneholder. */
+    for (int i = 0; i < n; i += SAMTIDIGE) {
+        int slutt = (i + SAMTIDIGE < n) ? i + SAMTIDIGE : n;
+
+        EPD_IT8951_WaitForDisplayReady();
+        for (int j = i; j < slutt; j++) {
+            avbrutt_hvis_bedt_om();
+            last_rekt(pakket, info.Panel_W, &rekt[j], target, packed_write, bit);
+        }
+        for (int j = i; j < slutt; j++) {
+            EPD_IT8951_Display_AreaBuf(rekt[j].x, rekt[j].y, rekt[j].w, rekt[j].h,
+                                       mode, target);
+        }
     }
     free(bit);
 

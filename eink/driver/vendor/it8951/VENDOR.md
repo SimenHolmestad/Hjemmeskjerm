@@ -64,10 +64,13 @@ er lett å lese. Filene ble committet uendret først, så endringene ligger i eg
   fullskjermsbilde.
 - `EPD_IT8951_Clear_Refresh()` har fått `Packed_Write` som parameter. Upstream sendte `false`
   hardkodet videre, så `clear` kunne ikke bruke blokkveien.
-- `EPD_IT8951_4bp_Refresh()` har fått `Mode` som parameter. Upstream låser bølgeformen til
-  `GC16_Mode`, og GC16 driver hver piksel gjennom svart. Uten valget kan ikke en delvis
-  oppdatering be om en bølgeform som ikke blinker. `2bp` og `8bp` er urørt – vi bruker dem
-  ikke.
+- **`EPD_IT8951_4bp_Refresh()` er erstattet av `EPD_IT8951_4bp_Load()` pluss et avstatiskt
+  `EPD_IT8951_Display_AreaBuf()`.** Upstream gjør begge deler i ett kall og venter på panelet
+  først, og da tegnes ett område om gangen. Hver for seg kan flere områder lastes inn og så
+  sendes av gårde uten venting imellom, og panelet tegner dem samtidig – én bølgeform i stedet
+  for én per område. `4bp_Load` venter derfor med vilje ikke; det er den som kaller som
+  bestemmer. Samme grunn gjør at bølgeformen er en parameter og ikke låst til `GC16_Mode`.
+  `2bp` og `8bp` er urørt – vi bruker dem ikke.
 
 ### `Debug.h`
 - `Debug()` skriver til `stderr` i stedet for `stdout`, og er stille med mindre
@@ -78,7 +81,7 @@ er lett å lese. Filene ble committet uendret først, så endringene ligger i eg
 - Inkluderingssti flatet ut (`"../Config/DEV_Config.h"` → `"DEV_Config.h"`).
 - Prototype for `EPD_IT8951_WaitForDisplayReady()`. Upstream har den bare inne i en
   utkommentert blokk, samtidig som funksjonen er `static` i `.c`-fila.
-- `Mode` lagt til i erklæringa av `EPD_IT8951_4bp_Refresh()`.
+- `EPD_IT8951_4bp_Refresh()` erstattet av `EPD_IT8951_4bp_Load()` og `EPD_IT8951_Display_AreaBuf()`.
 
 ### `epd_host.h`
 Ny fil, ikke fra Waveshare. Den ene krok-headeren vendret kode inkluderer, slik at vi slipper

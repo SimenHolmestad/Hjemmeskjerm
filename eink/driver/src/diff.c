@@ -76,6 +76,36 @@ static void slaa_sammen_billigste(rect_t *r, int *n)
     (*n)--;
 }
 
+static int overlapper(const rect_t *a, const rect_t *b)
+{
+    return (uint32_t)a->x < (uint32_t)b->x + b->w
+        && (uint32_t)b->x < (uint32_t)a->x + a->w
+        && (uint32_t)a->y < (uint32_t)b->y + b->h
+        && (uint32_t)b->y < (uint32_t)a->y + a->h;
+}
+
+/* Sammenslåingen over setter et rektangel til den omsluttende boksen rundt to
+ * andre, og den boksen kan legge seg over et tredje som ikke var med. Da ville
+ * det samme området blitt tegnet to ganger, og hver gang koster en hel
+ * bølgeform. Panelet liker det heller ikke om det skulle vise seg at det kan
+ * tegne flere områder samtidig. */
+static void foren_overlappende(rect_t *r, int *n)
+{
+    int endret = 1;
+    while (endret) {
+        endret = 0;
+        for (int i = 0; i < *n && !endret; i++) {
+            for (int j = i + 1; j < *n && !endret; j++) {
+                if (!overlapper(&r[i], &r[j])) continue;
+                r[i] = forening(&r[i], &r[j]);
+                r[j] = r[*n - 1];
+                (*n)--;
+                endret = 1;   /* den nye boksen kan nå treffe noe vi har passert */
+            }
+        }
+    }
+}
+
 static rect_t rekt_av_ruter(int c, int r, int c2, int r2, uint16_t w, uint16_t h)
 {
     uint32_t x  = (uint32_t)c * DIFF_TILE;
@@ -165,6 +195,7 @@ int diff_rects(const uint8_t *na, const uint8_t *forrige,
      * den omsluttende boksen rundt alt i stedet ville gjort en endring øverst
      * og en nederst til en oppdatering av hele skjermen. */
     while (m > maks_rekt) slaa_sammen_billigste(raa, &m);
+    foren_overlappende(raa, &m);
 
     int n = m;
     for (int i = 0; i < n; i++) ut[i] = raa[i];

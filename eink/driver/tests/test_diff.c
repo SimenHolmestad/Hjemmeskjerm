@@ -36,6 +36,21 @@ static int justering_ok(const rect_t *r, int n)
     return 1;
 }
 
+/* To rektangler skal aldri overlappe: da ville det samme omraadet blitt tegnet
+ * to ganger, og hver oppdatering koster en hel bolgeform. */
+static int ingen_overlapp(const rect_t *r, int n)
+{
+    for (int i = 0; i < n; i++) {
+        for (int j = i + 1; j < n; j++) {
+            if ((uint32_t)r[i].x < (uint32_t)r[j].x + r[j].w
+             && (uint32_t)r[j].x < (uint32_t)r[i].x + r[i].w
+             && (uint32_t)r[i].y < (uint32_t)r[j].y + r[j].h
+             && (uint32_t)r[j].y < (uint32_t)r[i].y + r[i].h) return 0;
+        }
+    }
+    return 1;
+}
+
 /* Hver byte som faktisk skiller seg skal ligge inne i et av rektanglene.
  * Dette er den egentlige testen: rektanglene kan gjerne være for store,
  * men aldri for små. */
@@ -85,6 +100,7 @@ int main(void)
               "rektangelet er ruta pikselen ligger i");
         sjekk(justering_ok(r, n), "rektangelet er justert for 4bpp");
         sjekk(alt_dekket(na, forrige, r, n), "endringen ligger inne i rektangelet");
+        sjekk(ingen_overlapp(r, n), "rektanglene overlapper ikke");
     }
 
     /* --- 3. To endringer langt fra hverandre -------------------------- */
@@ -97,6 +113,7 @@ int main(void)
         sjekk(n == 2, "to endringer langt fra hverandre gir to rektangler");
         sjekk(justering_ok(r, n), "begge rektanglene er justert for 4bpp");
         sjekk(alt_dekket(na, forrige, r, n), "begge endringene er dekket");
+        sjekk(ingen_overlapp(r, n), "rektanglene overlapper ikke");
     }
 
     /* --- 4. Et sammenhengende felt blir ett rektangel ------------------ */
@@ -110,6 +127,7 @@ int main(void)
         sjekk(n == 1, "et sammenhengende felt blir ett rektangel");
         sjekk(justering_ok(r, n), "feltet er justert for 4bpp");
         sjekk(alt_dekket(na, forrige, r, n), "hele feltet er dekket");
+        sjekk(ingen_overlapp(r, n), "rektanglene overlapper ikke");
     }
 
     /* --- 5. Over terskelen -> hele skjermen --------------------------- */
@@ -138,6 +156,7 @@ int main(void)
         sjekk(n > 0 && n <= DIFF_MAKS_REKT, "antallet holder seg innenfor taket");
         sjekk(justering_ok(r, n), "de sammenslaatte er justert for 4bpp");
         sjekk(alt_dekket(na, forrige, r, n), "alle endringene er dekket");
+        sjekk(ingen_overlapp(r, n), "rektanglene overlapper ikke");
     }
 
     /* --- 7. Endringer i hver sin ende skal ikke sluke skjermen -------- *
@@ -173,6 +192,7 @@ int main(void)
         sjekk(prosent < 25, hva);
         sjekk(n > 1, "de to omraadene holdes fra hverandre");
         sjekk(alt_dekket(na, forrige, r, n), "alle endringene er dekket");
+        sjekk(ingen_overlapp(r, n), "rektanglene overlapper ikke");
     }
 
     /* --- 7. Endring i siste rad og siste kolonne ----------------------- *
@@ -188,6 +208,7 @@ int main(void)
               "rektangelet i hjornet stopper ved panelkanten");
         sjekk(justering_ok(r, n), "hjornerektangelet er justert for 4bpp");
         sjekk(alt_dekket(na, forrige, r, n), "hjornepikselen er dekket");
+        sjekk(ingen_overlapp(r, n), "rektanglene overlapper ikke");
     }
 
     /* --- 8. Utklippet som sendes til panelet -------------------------- *
@@ -228,6 +249,51 @@ int main(void)
             sjekk(likt, hva);
             free(bit);
         }
+    }
+
+    /* --- 9. Tilfeldige moenstre ---------------------------------------- *
+     * Haandlagde tilfeller treffer bare det man har tenkt paa. Her kastes
+     * tilfeldige felt utover skjermen, og invariantene skal holde uansett. */
+    {
+        unsigned seed = 271828;
+        int runder = 0, brudd_dekning = 0, brudd_overlapp = 0;
+        int brudd_tak = 0, brudd_just = 0;
+
+        for (int forsok = 0; forsok < 300; forsok++) {
+            memcpy(na, forrige, (size_t)STRIDE * H);
+
+            seed = seed * 1103515245u + 12345u;
+            int felt = (int)((seed >> 16) % 25u) + 1;
+
+            for (int f = 0; f < felt; f++) {
+                seed = seed * 1103515245u + 12345u;
+                uint16_t x = (uint16_t)((seed >> 16) % (W / 2));
+                seed = seed * 1103515245u + 12345u;
+                uint16_t y = (uint16_t)((seed >> 16) % (uint32_t)(H - 80));
+                seed = seed * 1103515245u + 12345u;
+                uint16_t bredde = (uint16_t)((seed >> 16) % 120u) + 1u;
+                seed = seed * 1103515245u + 12345u;
+                uint16_t hoyde = (uint16_t)((seed >> 16) % 60u) + 1u;
+
+                for (uint16_t dy = 0; dy < hoyde; dy++) {
+                    memset(na + (size_t)(y + dy) * STRIDE + x, 0x00, bredde);
+                }
+            }
+
+            int n = diff_rects(na, forrige, W, H, r, DIFF_MAKS_REKT, DIFF_FULL_PROSENT);
+            runder++;
+            if (!alt_dekket(na, forrige, r, n))     brudd_dekning++;
+            if (!ingen_overlapp(r, n))              brudd_overlapp++;
+            if (n < 0 || n > DIFF_MAKS_REKT)        brudd_tak++;
+            if (n > 0 && !justering_ok(r, n))       brudd_just++;
+        }
+
+        char hva[80];
+        snprintf(hva, sizeof hva, "%d tilfeldige runder: alt dekket", runder);
+        sjekk(brudd_dekning == 0, hva);
+        sjekk(brudd_overlapp == 0, "ingen av dem gir overlappende rektangler");
+        sjekk(brudd_tak == 0, "ingen av dem sprenger taket");
+        sjekk(brudd_just == 0, "alle er justert for 4bpp");
     }
 
     free(forrige); free(na);
