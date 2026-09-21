@@ -197,7 +197,8 @@ IT8951_Dev_Info EPD_IT8951_Init(UWORD VCOM);
  * ferdig etter en oppdatering, ikke bare foer den. */
 void EPD_IT8951_WaitForDisplayReady(void);
 
-void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Addr, UWORD Mode);
+/* hjemmeskjerm: Packed_Write lagt til. */
+void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Addr, UWORD Mode, bool Packed_Write);
 
 void EPD_IT8951_1bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, UBYTE Mode, UDOUBLE Target_Memory_Addr, bool Packed_Write);
 void EPD_IT8951_1bp_Multi_Frame_Write(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H,UDOUBLE Target_Memory_Addr, bool Packed_Write);

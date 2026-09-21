@@ -27,5 +27,6 @@ void bcm2835_spi_setBitOrder(uint8_t order);
 void bcm2835_spi_setDataMode(uint8_t mode);
 void bcm2835_spi_setClockDivider(uint16_t divider);
 uint8_t bcm2835_spi_transfer(uint8_t value);
+void bcm2835_spi_writenb(const char *buf, uint32_t len);
 
 #endif

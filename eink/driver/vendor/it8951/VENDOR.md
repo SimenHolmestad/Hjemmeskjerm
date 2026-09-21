@@ -29,12 +29,19 @@ Alle endringer er merket med `/* hjemmeskjerm: ... */` i koden, slik at en diff 
 er lett å lese. Filene ble committet uendret først, så endringene ligger i egne commits.
 
 ### `DEV_Config.c` / `DEV_Config.h`
+- **`DEV_SPI_WriteBytes()` er ny.** Blokkskriving over SPI (`bcm2835_spi_writenb`). Se
+  kommentaren i `DEV_Config.c` for hvorfor per-byte-veien er så mye dyrere enn den ser ut.
 - **Bare BCM-backenden er beholdt.** Upstream har `#ifdef BCM / #elif LGPIO / #elif GPIOD` i
   ti blokker. LGPIO ble lagt til av Waveshare for Pi 5 og fikk aldri panelet til å svare på
   vår Pi 3 – `epaper info` kom gjennom oppsettet, men leste bare nuller, ved alle
-  SPI-frekvenser fra 12,5 MHz ned til 1 MHz og med full dupleks. GPIOD har vi aldri brukt.
+  SPI-frekvenser fra 12,5 MHz ned til 1 MHz og med full dupleks – at den feilet like fullt på
+  1 MHz er grunnen til at vi tror det var backenden og ikke farten. GPIOD har vi aldri brukt.
   Begge grenene er fjernet, sammen med `EPAPER_SPI_HZ`, `GPIO_Handle` og `SPI_Handle`.
   Fila gikk fra 315 til ~190 linjer, og det er ikke lenger noen `-D<backend>` å huske.
+- **SPI-klokka er en byggeknapp.** Upstream har to linjer der den ene er kommentert ut,
+  `DIVIDER_16` for Pi 3 og `DIVIDER_32` for Pi 4. Nå settes den med `make SPI_DIVIDER=...`,
+  med `_Static_assert` på at den er en toerpotens. Standarden er 16, altså upstreams
+  Pi 3-verdi – se README.
 - Død `#elif USE_WIRINGPI_LIB`-gren fjernet. Den lå etter `#ifdef BCM`, `USE_WIRINGPI_LIB`
   defineres aldri av noen Makefile, og den refererte wiringPi-symboler vi ikke lenker mot.
 - `DEV_Module_Init` sjekker `geteuid()` før `bcm2835_init()`. Uten root faller `bcm2835_init()`
@@ -49,6 +56,14 @@ er lett å lese. Filene ble committet uendret først, så endringene ligger i eg
   en oppdatering. Upstream kaller den bare *før* skriving, så `Clear_Refresh` og
   `4bp_Refresh` returnerer mens panelet fortsatt oppdaterer.
 - `EPD_IT8951_Clear_Refresh()` — `malloc` sjekkes for NULL.
+- `EPD_IT8951_WriteMuitiData()` — skriver i blokker gjennom det nye `DEV_SPI_WriteBytes` i
+  stedet for to `DEV_SPI_WriteByte` per ord. Hver blokk er en vanlig dataskriving med CS og
+  preamble, så BUSY leses underveis; upstream leste den bare én gang før hele ramma.
+- `Source_Buffer_Length` i `HostAreaPackedPixelWrite_1bp/2bp/4bp` er `UDOUBLE` og ikke
+  `UWORD`. Bredde ganger høyde sprenger 16 bit, så `Packed_Write` kunne ikke virke på et
+  fullskjermsbilde.
+- `EPD_IT8951_Clear_Refresh()` har fått `Packed_Write` som parameter. Upstream sendte `false`
+  hardkodet videre, så `clear` kunne ikke bruke blokkveien.
 
 ### `Debug.h`
 - `Debug()` skriver til `stderr` i stedet for `stdout`, og er stille med mindre

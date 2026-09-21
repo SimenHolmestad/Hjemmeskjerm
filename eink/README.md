@@ -125,7 +125,8 @@ hjemmeskjerm-eink`.
 | `epaper clear --init` | Som over, men med INIT-bølgeform – skrubber bort ghosting |
 | `epaper info` | Skriver `key=value` om panelet til stdout |
 
-Flagg: `-v` slår på driverlogg til stderr, `--packed` bruker blokkskriving over SPI.
+Flagg: `-v` slår på driverlogg til stderr, `--no-packed` skriver pikseldataene ett ord om
+gangen i stedet for i blokker – se [Ting som er verdt å vite](#ting-som-er-verdt-å-vite).
 `EPAPER_VCOM` (volt, f.eks. `-1.14`) overstyrer den innkompilerte standardverdien;
 `render.py` setter den selv fra `eink.toml`.
 
@@ -138,6 +139,8 @@ tidsavbrudd, `4` ugyldig konfigurasjon, `130` avbrutt.
 make            # bygg
 make test       # tester pakkingen, trenger ingen skjerm
 make check      # syntakssjekker alt uten å lenke, virker også på en Mac
+
+make SPI_DIVIDER=32   # for en Pi 4B, se nedenfor
 ```
 
 `make test` og `make check` kjører fint på en utviklingsmaskin uten e-paper. Det samme gjør
@@ -146,12 +149,29 @@ se hva som faktisk fanges opp før det havner på veggen.
 
 ## Ting som er verdt å vite
 
-**SPI-overføringen går byte for byte.** `DEV_SPI_WriteByte` i den vendrete driveren gjør ett
-kall per byte, og en full ramme er 1,3 MB. Under BCM er hvert kall en registerskriving mot
-minnekartet, så det er raskere enn det høres ut som, men det er fortsatt den soleklart
-største mulige optimaliseringen her: får man pakkebufferet skrevet i én blokk, havner
-overføringen godt under sekundet. Mål med `time sudo ./epaper display ...` før du eventuelt
-gjør noe med det.
+**SPI-overføringen går i blokker.** Waveshares vei skriver pikseldataene ett 16-bits ord om
+gangen, og hvert ord er to `bcm2835_spi_transfer`-kall. Det kallet er ikke en enkel
+registerskriving: det tømmer FIFO-en, setter TA=1, skriver én byte, venter på DONE og setter
+TA=0 igjen. Klokka står altså stille mellom hver byte.
+
+Vi går i stedet gjennom `DEV_SPI_WriteBytes` → `bcm2835_spi_writenb`, som holder FIFO-en
+fôret så klokka løper sammenhengende. Dataene deles i blokker på 512 ord; hver blokk er en
+helt vanlig dataskriving med CS og preamble, og BUSY leses foran hver av dem – samme
+disiplin som den ordvise veien, bare en blokk om gangen i stedet for et ord.
+
+`--no-packed` finnes bare som vei ut om blokkskrivinga skulle vise seg å krangle med panelet.
+Går noe galt der, ser det ut som en skjerm som bare delvis tegnes opp.
+
+**SPI-klokka hører til brettet.** Delefaktoren settes med `make SPI_DIVIDER=...` og er 16,
+som er verdien for Pi 3/3B/3B+. Bytter du til en Pi 4B, må den til 32: delefaktoren deler
+core clock, Pi 4 har dobbelt core clock av Pi 3, og
+[Waveshares wiki](https://www.waveshare.com/wiki/10.3inch_e-Paper_HAT) advarer om at 16 på en
+Pi 4B gir «transmission errors». De to verdiene sikter altså mot samme bussfart.
+
+For høy fart viser seg som at `epaper info` leser nuller eller tull, eller som et forvrengt
+bilde. Sjekk `info` etter en endring – `-v` skriver ut hvilken delefaktor bygget har. Vær
+oppmerksom på at overføringsfeil kan være sporadiske, så en enkelt god ramme er ikke bevis;
+la `render.py` gå noen runder.
 
 **Ghosting.** Hver 20. runde kjøres `clear --init` først. Juster med `init_clear_every` i
 `eink.toml`, eller sett den til 0 for å skru det av.

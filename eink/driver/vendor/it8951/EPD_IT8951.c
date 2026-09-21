@@ -140,26 +140,45 @@ static void EPD_IT8951_WriteData(UWORD Data)
 function :	write multi data
 parameter:  data
 ******************************************************************************/
+/* hjemmeskjerm: skriver i blokker i stedet for ett ord om gangen. Hver blokk
+ * er en vanlig dataskriving med CS, preamble og BUSY-sjekk, som IT8951
+ * godtar flere av mellom LoadImgAreaStart og LoadImgEnd. Bufferet er UWORD i
+ * vertens rekkefolge; panelet vil ha hoy byte forst, derav byteswappen. */
+#define EPD_SPI_BLOCK_WORDS 512
+
 static void EPD_IT8951_WriteMuitiData(UWORD* Data_Buf, UDOUBLE Length)
 {
     //Set Preamble for Write Command
 	UWORD Write_Preamble = 0x0000;
+    UBYTE Block[EPD_SPI_BLOCK_WORDS * 2];
 
-    EPD_IT8951_ReadBusy();
-
-    DEV_Digital_Write(EPD_CS_PIN, LOW);
-
-	DEV_SPI_WriteByte(Write_Preamble>>8);
-	DEV_SPI_WriteByte(Write_Preamble);
-
-    EPD_IT8951_ReadBusy();
-
-    for(UDOUBLE i = 0; i<Length; i++)
+    for(UDOUBLE Sent = 0; Sent < Length; )
     {
-	    DEV_SPI_WriteByte(Data_Buf[i]>>8);
-	    DEV_SPI_WriteByte(Data_Buf[i]);
+        UDOUBLE n = Length - Sent;
+        if(n > EPD_SPI_BLOCK_WORDS) n = EPD_SPI_BLOCK_WORDS;
+
+        for(UDOUBLE i = 0; i < n; i++)
+        {
+            UWORD w = Data_Buf[Sent + i];
+            Block[2*i]     = (UBYTE)(w >> 8);
+            Block[2*i + 1] = (UBYTE)w;
+        }
+
+        EPD_IT8951_ReadBusy();
+
+        DEV_Digital_Write(EPD_CS_PIN, LOW);
+
+        DEV_SPI_WriteByte(Write_Preamble>>8);
+        DEV_SPI_WriteByte(Write_Preamble);
+
+        EPD_IT8951_ReadBusy();
+
+        DEV_SPI_WriteBytes(Block, n * 2u);
+
+        DEV_Digital_Write(EPD_CS_PIN, HIGH);
+
+        Sent += n;
     }
-    DEV_Digital_Write(EPD_CS_PIN, HIGH);
 }
 
 
@@ -429,7 +448,8 @@ parameter:
 static void EPD_IT8951_HostAreaPackedPixelWrite_1bp(IT8951_Load_Img_Info*Load_Img_Info,IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
 {
     UWORD Source_Buffer_Width, Source_Buffer_Height;
-    UWORD Source_Buffer_Length;
+    /* hjemmeskjerm: var UWORD. Bredde ganger hoyde sprenger 16 bit. */
+    UDOUBLE Source_Buffer_Length;
 
     UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
     EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
@@ -471,7 +491,8 @@ parameter:
 static void EPD_IT8951_HostAreaPackedPixelWrite_2bp(IT8951_Load_Img_Info*Load_Img_Info, IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
 {
     UWORD Source_Buffer_Width, Source_Buffer_Height;
-    UWORD Source_Buffer_Length;
+    /* hjemmeskjerm: var UWORD. Bredde ganger hoyde sprenger 16 bit. */
+    UDOUBLE Source_Buffer_Length;
 
     UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
     EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
@@ -512,7 +533,8 @@ parameter:
 static void EPD_IT8951_HostAreaPackedPixelWrite_4bp(IT8951_Load_Img_Info*Load_Img_Info, IT8951_Area_Img_Info*Area_Img_Info, bool Packed_Write)
 {
     UWORD Source_Buffer_Width, Source_Buffer_Height;
-    UWORD Source_Buffer_Length;
+    /* hjemmeskjerm: var UWORD. Bredde ganger hoyde sprenger 16 bit. */
+    UDOUBLE Source_Buffer_Length;
 	
     UWORD* Source_Buffer = (UWORD*)Load_Img_Info->Source_Buffer_Addr;
     EPD_IT8951_SetTargetMemoryAddr(Load_Img_Info->Target_Memory_Addr);
@@ -724,7 +746,8 @@ IT8951_Dev_Info EPD_IT8951_Init(UWORD VCOM)
 function :	EPD_IT8951_Clear_Refresh
 parameter:  
 ******************************************************************************/
-void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Addr, UWORD Mode)
+/* hjemmeskjerm: Packed_Write lagt til som parameter. */
+void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Addr, UWORD Mode, bool Packed_Write)
 {
 
     UDOUBLE ImageSize = ((Dev_Info.Panel_W * 4 % 8 == 0)? (Dev_Info.Panel_W * 4 / 8 ): (Dev_Info.Panel_W * 4 / 8 + 1)) * Dev_Info.Panel_H;
@@ -751,7 +774,7 @@ void EPD_IT8951_Clear_Refresh(IT8951_Dev_Info Dev_Info,UDOUBLE Target_Memory_Add
     Area_Img_Info.Area_W = Dev_Info.Panel_W;
     Area_Img_Info.Area_H = Dev_Info.Panel_H;
 
-    EPD_IT8951_HostAreaPackedPixelWrite_4bp(&Load_Img_Info, &Area_Img_Info, false);
+    EPD_IT8951_HostAreaPackedPixelWrite_4bp(&Load_Img_Info, &Area_Img_Info, Packed_Write);   /* hjemmeskjerm */
 
     EPD_IT8951_Display_Area(0, 0, Dev_Info.Panel_W, Dev_Info.Panel_H, Mode);
 

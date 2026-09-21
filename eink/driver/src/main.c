@@ -97,8 +97,8 @@ static void bruk(void)
         "\n"
         "flagg:\n"
         "  -v           logg fra driveren til stderr (samme som EPAPER_DEBUG=1)\n"
-        "  --packed     bruk blokkskriving over SPI. Raskere, men mindre utproevd;\n"
-        "               driveren sjekker da BUSY bare ved starten av overfoeringen.\n"
+        "  --no-packed  skriv pikseldataene ett ord om gangen i stedet for i blokker.\n"
+        "               Saktere; vei ut om blokkskrivinga krangler med panelet.\n"
         "\n"
         "miljo:\n"
         "  EPAPER_VCOM  panelets VCOM i volt, f.eks. -1.14. Staar paa flexkabelen.\n",
@@ -164,15 +164,15 @@ int main(int argc, char **argv)
     const char *kommando = NULL;
     const char *bmp_sti  = NULL;
     int init_clear   = 0;
-    int packed_write = 0;
+    int packed_write = 1;   /* --no-packed er en vei ut, ikke en normalvei */
 
     if (getenv("EPAPER_DEBUG") != NULL) Debug_Enabled = 1;
 
     for (int i = 1; i < argc; i++) {
         const char *a = argv[i];
-        if (strcmp(a, "-v") == 0)            { Debug_Enabled = 1; }
-        else if (strcmp(a, "--packed") == 0) { packed_write = 1; }
-        else if (strcmp(a, "--init") == 0)   { init_clear = 1; }
+        if (strcmp(a, "-v") == 0)               { Debug_Enabled = 1; }
+        else if (strcmp(a, "--no-packed") == 0) { packed_write = 0; }
+        else if (strcmp(a, "--init") == 0)      { init_clear = 1; }
         else if (strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) { bruk(); return EXIT_OK; }
         else if (a[0] == '-')  { fprintf(stderr, "epaper: ukjent flagg %s\n", a); bruk(); return EXIT_USAGE; }
         else if (kommando == NULL) { kommando = a; }
@@ -274,7 +274,8 @@ int main(int argc, char **argv)
     }
 
     if (er_clear) {
-        EPD_IT8951_Clear_Refresh(info, target, init_clear ? INIT_Mode : GC16_Mode);
+        EPD_IT8951_Clear_Refresh(info, target, init_clear ? INIT_Mode : GC16_Mode,
+                                 packed_write ? true : false);
     } else {
         if (bilde.w != info.Panel_W || bilde.h != info.Panel_H) {
             fprintf(stderr, "epaper: bildet er %ux%u, men panelet er %ux%u. "

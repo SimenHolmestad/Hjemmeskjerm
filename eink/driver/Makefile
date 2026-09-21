@@ -9,6 +9,10 @@
 
 VCOM_DEFAULT_MV ?= 1140          # -1,14 V. Overstyres av EPAPER_VCOM.
 
+# SPI-klokka som delefaktor av core clock (toerpotens). Verdien hoerer til
+# brettet: 16 for Pi 3/3B/3B+, 32 for Pi 4B. Se README.
+SPI_DIVIDER ?= 16
+
 SRC_DIR = src
 VEN_DIR = vendor/it8951
 BIN_DIR = build
@@ -18,7 +22,8 @@ CC     ?= gcc
 WARN   = -Wall -Wextra -Wno-unused-parameter
 CFLAGS += -std=gnu11 $(WARN) -O2 -g -fno-strict-aliasing \
           -I$(SRC_DIR) -I$(VEN_DIR) \
-          -DEPAPER_VCOM_DEFAULT_MV=$(VCOM_DEFAULT_MV)
+          -DEPAPER_VCOM_DEFAULT_MV=$(VCOM_DEFAULT_MV) \
+          -DEPAPER_SPI_DIVIDER=$(SPI_DIVIDER)
 LDLIBS  = -lm -lrt -lpthread -lbcm2835
 
 # -fno-strict-aliasing er ikke valgfritt: driveren caster vår UBYTE*-buffer

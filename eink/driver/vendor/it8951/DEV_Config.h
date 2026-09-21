@@ -89,6 +89,8 @@ void DEV_Digital_Write(UWORD Pin, UBYTE Value);
 UBYTE DEV_Digital_Read(UWORD Pin);
 
 void DEV_SPI_WriteByte(UBYTE Value);
+/* hjemmeskjerm: skriver Len byte i en blokk. */
+void DEV_SPI_WriteBytes(const UBYTE *Buf, UDOUBLE Len);
 UBYTE DEV_SPI_ReadByte();
 
 void DEV_Delay_ms(UDOUBLE xms);

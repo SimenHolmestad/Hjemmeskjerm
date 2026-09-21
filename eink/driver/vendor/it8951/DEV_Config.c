@@ -30,6 +30,15 @@
 #include "DEV_Config.h"
 #include <fcntl.h>
 
+/* hjemmeskjerm: settes av Makefile. bcm2835 krever en toerpotens. */
+#ifndef EPAPER_SPI_DIVIDER
+#define EPAPER_SPI_DIVIDER 16
+#endif
+_Static_assert(EPAPER_SPI_DIVIDER >= 2 && EPAPER_SPI_DIVIDER <= 65536,
+               "EPAPER_SPI_DIVIDER maa vaere mellom 2 og 65536");
+_Static_assert((EPAPER_SPI_DIVIDER & (EPAPER_SPI_DIVIDER - 1)) == 0,
+               "EPAPER_SPI_DIVIDER maa vaere en toerpotens");
+
 
 /******************************************************************************
 function:	GPIO Write
@@ -61,6 +70,14 @@ Info:
 void DEV_SPI_WriteByte(UBYTE Value)
 {
 	bcm2835_spi_transfer(Value);
+}
+
+/* hjemmeskjerm: ny. bcm2835_spi_transfer setter TA og venter paa DONE per
+ * byte; writenb holder FIFO-en foret gjennom hele blokka. Ren skrivevei. */
+void DEV_SPI_WriteBytes(const UBYTE *Buf, UDOUBLE Len)
+{
+	/* const-cast: signaturen ble const char* i libbcm2835 1.60. */
+	bcm2835_spi_writenb((char *)Buf, (uint32_t)Len);
 }
 
 /******************************************************************************
@@ -158,8 +175,10 @@ UBYTE DEV_Module_Init(void)
 	bcm2835_spi_begin();                                         //Start spi interface, set spi pin for the reuse function
 	bcm2835_spi_setBitOrder(BCM2835_SPI_BIT_ORDER_MSBFIRST);     //High first transmission
 	bcm2835_spi_setDataMode(BCM2835_SPI_MODE0);                  //spi mode 0
-	//bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_16);   //For RPi3/3B/3B+
-	bcm2835_spi_setClockDivider(BCM2835_SPI_CLOCK_DIVIDER_32);   //For RPi 4
+	/* hjemmeskjerm: `make SPI_DIVIDER=...`. Deler core clock, som er
+	 * brett-avhengig, saa verdien hoerer til brettet - se README. */
+	bcm2835_spi_setClockDivider(EPAPER_SPI_DIVIDER);
+	Debug("SPI clock divider: %d\r\n", EPAPER_SPI_DIVIDER);
 	/* SPI clock reference link：*/
 	/*http://www.airspayce.com/mikem/bcm2835/group__constants.html#gaf2e0ca069b8caef24602a02e8a00884e*/
 
