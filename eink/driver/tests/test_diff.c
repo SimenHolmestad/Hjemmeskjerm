@@ -135,9 +135,44 @@ int main(void)
         sjekk(satt > DIFF_MAKS_REKT, "testen setter flere ruter enn taket");
 
         int n = diff_rects(na, forrige, W, H, r, DIFF_MAKS_REKT, DIFF_FULL_PROSENT);
-        sjekk(n == 1, "flere rektangler enn taket slaas sammen til ett");
-        sjekk(justering_ok(r, n), "den omsluttende boksen er justert for 4bpp");
-        sjekk(alt_dekket(na, forrige, r, n), "alle endringene er inne i boksen");
+        sjekk(n > 0 && n <= DIFF_MAKS_REKT, "antallet holder seg innenfor taket");
+        sjekk(justering_ok(r, n), "de sammenslaatte er justert for 4bpp");
+        sjekk(alt_dekket(na, forrige, r, n), "alle endringene er dekket");
+    }
+
+    /* --- 7. Endringer i hver sin ende skal ikke sluke skjermen -------- *
+     * Dette er tilfellet som gjorde at hele skjermen blinket: naar
+     * oppdelingen ga flere rektangler enn taket, ble alt slaatt sammen til
+     * den omsluttende boksen - og en endring oppe og en nede gir en boks
+     * som dekker alt. Naboer skal slaas sammen, ikke motsatte hjorner. */
+    {
+        memcpy(na, forrige, (size_t)STRIDE * H);
+
+        /* En tabell oeverst der mange rader endrer seg, som Entur-tavla. */
+        for (int rad = 0; rad < 20; rad++) {
+            uint16_t y = (uint16_t)(100 + rad * 40);
+            for (uint16_t dy = 0; dy < 16; dy++) {
+                memset(na + (size_t)(y + dy) * STRIDE + 60, 0x00, 100);
+            }
+        }
+        /* Og ett enkelt tall nederst, langt unna. */
+        for (uint16_t y = H - 60; y < H - 20; y++) {
+            memset(na + (size_t)y * STRIDE + 800, 0x00, 40);
+        }
+
+        int n = diff_rects(na, forrige, W, H, r, DIFF_MAKS_REKT, DIFF_FULL_PROSENT);
+
+        unsigned long areal = 0;
+        for (int i = 0; i < n; i++) areal += (unsigned long)r[i].w * r[i].h;
+        unsigned long prosent = areal * 100UL / ((unsigned long)W * H);
+
+        char hva[80];
+        snprintf(hva, sizeof hva,
+                 "tabell oeverst + tall nederst tegner %lu%%, ikke hele skjermen",
+                 prosent);
+        sjekk(prosent < 25, hva);
+        sjekk(n > 1, "de to omraadene holdes fra hverandre");
+        sjekk(alt_dekket(na, forrige, r, n), "alle endringene er dekket");
     }
 
     /* --- 7. Endring i siste rad og siste kolonne ----------------------- *

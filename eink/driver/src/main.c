@@ -402,6 +402,23 @@ int main(int argc, char **argv)
         }
     }
 
+    /* Hvor mye som faktisk tegnes er det ene tallet man trenger naar skjermen
+     * blinker mer enn ventet, saa det gaar til stdout uansett - samme
+     * key=value-stil som `info`. Selve rektanglene ligger bak -v. */
+    unsigned long areal = 0;
+    for (int i = 0; i < n; i++) areal += (unsigned long)rekt[i].w * rekt[i].h;
+    unsigned long promille = areal * 1000UL / ((unsigned long)info.Panel_W * info.Panel_H);
+    printf("rects=%d\n", n);
+    printf("area_pct=%lu.%lu\n", promille / 10, promille % 10);
+    fflush(stdout);
+
+    if (Debug_Enabled) {
+        for (int i = 0; i < n; i++) {
+            fprintf(stderr, "  %ux%u @ %u,%u\n",
+                    rekt[i].w, rekt[i].h, rekt[i].x, rekt[i].y);
+        }
+    }
+
     if (n == 0) {
         /* E-paper holder på bildet sitt selv. Er ingenting endret, er det
          * ingenting å gjøre, og panelet slipper en oppdatering helt. */
@@ -409,18 +426,6 @@ int main(int argc, char **argv)
         free(pakket);
         ryd_opp();
         return EXIT_OK;
-    }
-
-    if (Debug_Enabled) {
-        unsigned long areal = 0;
-        for (int i = 0; i < n; i++) areal += (unsigned long)rekt[i].w * rekt[i].h;
-        fprintf(stderr, "tegner %d rektangel%s, %lu%% av skjermen\n",
-                n, n == 1 ? "" : "er",
-                areal * 100UL / ((unsigned long)info.Panel_W * info.Panel_H));
-        for (int i = 0; i < n; i++) {
-            fprintf(stderr, "  %ux%u @ %u,%u\n",
-                    rekt[i].w, rekt[i].h, rekt[i].x, rekt[i].y);
-        }
     }
 
     uint8_t *bit = malloc(pakket_stor);   /* plass til det største rektangelet */

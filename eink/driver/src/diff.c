@@ -5,6 +5,7 @@
  * å regne om koordinater, og siden 1 byte er nøyaktig 2 piksler, blir hele
  * sammenligningen memcmp på bytegrenser.
  */
+#include <stdint.h>
 #include <string.h>
 
 #include "diff.h"
@@ -15,6 +16,11 @@
 
 static uint8_t skitten[MAKS_SIDE * MAKS_SIDE];
 
+/* Hvor mange rektangler den grådige oppdelingen får lov å holde på før de
+ * slås sammen. Taket i seg selv er ikke viktig; det skal bare være romslig
+ * nok til at sammenslåingen har noe å velge mellom. */
+#define MAKS_RAA 64
+
 static int rute_endret(const uint8_t *na, const uint8_t *forrige,
                        uint32_t stride, uint16_t x, uint16_t y,
                        uint16_t rw, uint16_t rh)
@@ -24,6 +30,50 @@ static int rute_endret(const uint8_t *na, const uint8_t *forrige,
         if (memcmp(na + off, forrige + off, rw / 2u) != 0) return 1;
     }
     return 0;
+}
+
+static rect_t forening(const rect_t *a, const rect_t *b)
+{
+    uint32_t x0 = a->x < b->x ? a->x : b->x;
+    uint32_t y0 = a->y < b->y ? a->y : b->y;
+    uint32_t x1 = (uint32_t)a->x + a->w > (uint32_t)b->x + b->w
+                ? (uint32_t)a->x + a->w : (uint32_t)b->x + b->w;
+    uint32_t y1 = (uint32_t)a->y + a->h > (uint32_t)b->y + b->h
+                ? (uint32_t)a->y + a->h : (uint32_t)b->y + b->h;
+
+    rect_t u = { (uint16_t)x0, (uint16_t)y0,
+                 (uint16_t)(x1 - x0), (uint16_t)(y1 - y0) };
+    return u;
+}
+
+/* Hvor mange piksler vi ville tegnet i unødvendig hvis de to ble ett
+ * rektangel. Rektanglene fra oppdelingen overlapper aldri, så dette er
+ * aldri negativt. */
+static uint64_t sloseri(const rect_t *a, const rect_t *b)
+{
+    rect_t u = forening(a, b);
+    return (uint64_t)u.w * u.h - (uint64_t)a->w * a->h - (uint64_t)b->w * b->h;
+}
+
+/* Slår sammen det paret som koster minst. Det er dette som gjør at to
+ * endringer i hver sin ende av skjermen blir liggende hver for seg: å slå
+ * dem sammen ville kostet nesten hele skjermen, og et hvilket som helst
+ * naboppar er billigere. */
+static void slaa_sammen_billigste(rect_t *r, int *n)
+{
+    int bi = 0, bj = 1;
+    uint64_t best = UINT64_MAX;
+
+    for (int i = 0; i < *n; i++) {
+        for (int j = i + 1; j < *n; j++) {
+            uint64_t s = sloseri(&r[i], &r[j]);
+            if (s < best) { best = s; bi = i; bj = j; }
+        }
+    }
+
+    r[bi] = forening(&r[bi], &r[bj]);
+    r[bj] = r[*n - 1];
+    (*n)--;
 }
 
 static rect_t rekt_av_ruter(int c, int r, int c2, int r2, uint16_t w, uint16_t h)
@@ -81,11 +131,12 @@ int diff_rects(const uint8_t *na, const uint8_t *forrige,
 
     if (maks_r < 0) return 0;
 
-    /* Grådig sammenslåing: voks til høyre så langt rutene er skitne, så
-     * nedover så lenge hele kolonneområdet er skittent. */
-    int n = 0;
-    for (int r = min_r; r <= maks_r && n < maks_rekt; r++) {
-        for (int c = min_c; c <= maks_c && n < maks_rekt; c++) {
+    /* Grådig oppdeling: voks til høyre så langt rutene er skitne, så nedover
+     * så lenge hele kolonneområdet er skittent. */
+    rect_t raa[MAKS_RAA];
+    int m = 0;
+    for (int r = min_r; r <= maks_r; r++) {
+        for (int c = min_c; c <= maks_c; c++) {
             if (!skitten[(size_t)r * kol + c]) continue;
 
             int c2 = c;
@@ -104,19 +155,19 @@ int diff_rects(const uint8_t *na, const uint8_t *forrige,
             for (int i = r; i <= r2; i++) {
                 memset(&skitten[(size_t)i * kol + c], 0, (size_t)(c2 - c + 1));
             }
-            ut[n++] = rekt_av_ruter(c, r, c2, r2, w, h);
+
+            if (m == MAKS_RAA) slaa_sammen_billigste(raa, &m);
+            raa[m++] = rekt_av_ruter(c, r, c2, r2, w, h);
         }
     }
 
-    /* Ble noe liggende igjen, traff vi taket. Da er den omsluttende boksen
-     * både enklere og billigere enn å presse flere rektangler ut. */
-    for (int i = 0; i < kol * rad; i++) {
-        if (skitten[i]) {
-            ut[0] = rekt_av_ruter(min_c, min_r, maks_c, maks_r, w, h);
-            n = 1;
-            break;
-        }
-    }
+    /* Ned til taket ved å slå sammen de som ligger nærmest hverandre. Å ta
+     * den omsluttende boksen rundt alt i stedet ville gjort en endring øverst
+     * og en nederst til en oppdatering av hele skjermen. */
+    while (m > maks_rekt) slaa_sammen_billigste(raa, &m);
+
+    int n = m;
+    for (int i = 0; i < n; i++) ut[i] = raa[i];
 
     uint64_t areal = 0;
     for (int i = 0; i < n; i++) areal += (uint64_t)ut[i].w * ut[i].h;

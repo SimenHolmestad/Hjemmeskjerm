@@ -149,6 +149,10 @@ def kall_epaper(cfg: Config, *args: str) -> str:
     til liten nytte hvis den blir liggende i en pipe ingen leser.
     """
     kommando = [str(cfg.epaper), *args]
+    # Kjører vi selv med -v, vil vi ha driverens egen logg også – blant annet
+    # hvilke rektangler den tegner.
+    if log.isEnabledFor(logging.DEBUG):
+        kommando.append("-v")
     if cfg.bruk_sudo:
         # -n: feil heller enn å bli stående og vente på et passord ingen ser.
         kommando = ["sudo", "-n", *kommando]
@@ -299,8 +303,12 @@ def en_runde(nettleser: Nettleser, cfg: Config, lut: list[int],
         log.info("full INIT-klaring for å skrubbe bort ghosting")
         kall_epaper(cfg, "clear", "--mode", "init")
 
-    # epaper finner selv ut hva som har endret seg siden forrige runde.
-    kall_epaper(cfg, "display", str(cfg.frame), "--mode", cfg.mode)
+    # epaper finner selv ut hva som har endret seg siden forrige runde, og
+    # sier hvor mye det ble. Det tallet er verdt å ha i journalen: blinker
+    # skjermen mer enn ventet, er det her man ser hvorfor.
+    utdata = kall_epaper(cfg, "display", str(cfg.frame), "--mode", cfg.mode)
+    if utdata:
+        log.info("epaper: %s", utdata.replace("\n", " "))
 
 
 def main() -> int:

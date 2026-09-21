@@ -190,9 +190,18 @@ Sammenligningen gjøres på det *pakkede* bufferet `pack.c` lager, ikke på BMP-
 er allerede i panelets koordinater, allerede speilet og allerede kvantisert til de 16 nivåene
 panelet viser, og én byte er nøyaktig to piksler. Da kommer rektanglene ut ferdig speilet og
 på bytegrenser, og `render.py` slipper å vite noe om det hele. Rutenettet er 16 piksler: 4 er
-det IT8951 krever av `Area_X` og `Area_W` i 4bpp, og 1872 går opp i 16. Blir det flere enn
-tolv rektangler, tegnes den omsluttende boksen i stedet, og dekker de mer enn halve skjermen,
-tegnes alt. Logikken ligger i `src/diff.c` og testes av `make test`.
+det IT8951 krever av `Area_X` og `Area_W` i 4bpp, og 1872 går opp i 16. Logikken ligger i
+`src/diff.c` og testes av `make test`.
+
+Blir det flere enn tolv rektangler, slås de nærmeste sammen to og to til det er tolv igjen –
+det paret som koster minst i unødvendig tegnet areal først. Det er viktig at det er *naboer*
+som slås sammen: tar man i stedet den omsluttende boksen rundt alt, blir en endring øverst og
+en nederst til en oppdatering av hele skjermen. Dekker rektanglene til slutt mer enn halve
+skjermen, tegnes alt likevel – én full oppdatering er da billigere enn tolv.
+
+`epaper display` skriver `rects=` og `area_pct=` til stdout, og `render.py` logger det hver
+runde. Blinker skjermen mer enn ventet, er det de to tallene man skal se på. `-v` lister hvert
+enkelt rektangel.
 
 Forrige ramme ligger i `/var/lib/epaper/prev.4bpp`, med `/tmp` som reserve. Den skrives først
 når hele oppdateringen har gått gjennom, så en avbrutt kjøring etterlater ingen fil, og neste
