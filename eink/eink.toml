@@ -20,6 +20,11 @@ vcom   = -1.14                 # står på klistremerket på flexkabelen
 # 90 eller 270. Hvilken som er riktig avhenger av hvordan skjermen henger.
 # Står bildet opp ned, bytt til den andre.
 rotate = 90
+# Bølgeformen panelet tegner med. gc16 gir alle 16 gråtoner. a2 er raskere og
+# blinker ikke, men kan bare svart og hvitt, så gråtonene i YR-grafen og
+# vær-ikonene forsvinner. Waveshare dokumenterer bare init, gc16 og a2 for
+# 10,3-tommeren; gl16 og du er verdt å prøve, se README.
+mode = "gc16"
 
 [image]
 # Justeres mot det ekte panelet – e-paper ser gjerne flatere ut enn en skjerm.
@@ -28,10 +33,10 @@ gamma    = 1.0
 contrast = 1.0
 
 [loop]
-interval_seconds = 300
+interval_seconds = 30
 # Hver n-te runde gjør vi en full INIT-klaring først, for å skrubbe bort
-# ghosting. 0 slår det av.
-init_clear_every = 20
+# ghosting. 0 slår det av. 60 runder à 30 sekunder er en halvtime.
+init_clear_every = 60
 
 [paths]
 # Relative stier regnes ut fra mappa denne fila ligger i.
@@ -41,6 +46,7 @@ epaper  = "driver/epaper"
 # – se README.
 use_sudo = true
 frame   = "frame.bmp"
-# Et display-kall kan ta over et minutt, siden driveren skriver SPI byte for
-# byte. Timeouten er sikkerhetsnettet mot at det henger helt.
-timeout_seconds = 180
+# Sikkerhetsnettet mot at et epaper-kall blir stående. Går en runde i
+# tidsavbrudd, blir prosessen drept; den har da allerede kastet hurtiglageret
+# sitt, så neste runde tegner hele skjermen på nytt.
+timeout_seconds = 20

@@ -1,7 +1,7 @@
 /* epaper – viser et bilde på en Waveshare 10,3" IT8951 e-paper-skjerm.
  *
- *   epaper display <fil.bmp>   vis bildet (4bpp, GC16)
- *   epaper clear [--init]      gjør skjermen hvit
+ *   epaper display <fil.bmp>   vis det som har endret seg siden sist
+ *   epaper clear               gjør skjermen hvit
  *   epaper info                skriv ut hva panelet sier om seg selv
  *
  * Bildet skal allerede være rotert til panelets liggende format av
@@ -20,7 +20,9 @@
 
 #include "bmp.h"
 #include "common.h"
+#include "diff.h"
 #include "pack.h"
+#include "state.h"
 
 #include "EPD_IT8951.h"
 #include "epd_host.h"
@@ -91,11 +93,17 @@ static void bruk(void)
 {
     fputs(
         "bruk:\n"
-        "  epaper display <fil.bmp>   vis bildet (4bpp, GC16)\n"
-        "  epaper clear [--init]      gjor skjermen hvit (--init skrubber ghosting)\n"
+        "  epaper display <fil.bmp>   vis det som har endret seg siden sist\n"
+        "  epaper clear               gjor skjermen hvit\n"
         "  epaper info                skriv ut panelets egen info\n"
         "\n"
         "flagg:\n"
+        "  --mode <b>   bolgeform: init, du, gc16 (standard), gl16, glr16, gld16,\n"
+        "               a2, du4, eller et tall 0-7. Waveshare dokumenterer bare\n"
+        "               init, gc16 og a2 for 10,3-tommeren; resten gaar rett videre\n"
+        "               til firmwarens LUT, saa de maa proves mot panelet.\n"
+        "  --full       tegn hele skjermen, ikke bare det som har endret seg\n"
+        "  --no-cache   ikke bruk hurtiglageret: tegn alt, og la det staa tomt\n"
         "  -v           logg fra driveren til stderr (samme som EPAPER_DEBUG=1)\n"
         "  --no-packed  skriv pikseldataene ett ord om gangen i stedet for i blokker.\n"
         "               Saktere; vei ut om blokkskrivinga krangler med panelet.\n"
@@ -159,12 +167,64 @@ static void trygg_streng(char *ut, size_t n, const UBYTE *inn, size_t maks)
     ut[i] = '\0';
 }
 
+/* Bolgeformen er et tall firmwarens LUT slaar opp i. Navnene er de vanlige
+ * IT8951-modene; tallveien finnes fordi hvilke av dem en gitt firmware faktisk
+ * har, ikke staar noe sted vi kan lese. */
+static int les_mode(const char *s, UWORD *ut)
+{
+    static const struct { const char *navn; UWORD verdi; } kjente[] = {
+        { "init", 0 }, { "du", 1 }, { "gc16", 2 }, { "gl16", 3 },
+        { "glr16", 4 }, { "gld16", 5 }, { "a2", 6 }, { "du4", 7 },
+    };
+    for (size_t i = 0; i < sizeof kjente / sizeof kjente[0]; i++) {
+        if (strcmp(s, kjente[i].navn) == 0) { *ut = kjente[i].verdi; return 0; }
+    }
+
+    char *slutt = NULL;
+    long v = strtol(s, &slutt, 10);
+    if (slutt == s || *slutt != '\0' || v < 0 || v > 7) return -1;
+    *ut = (UWORD)v;
+    return 0;
+}
+
+/* clear setter hele panelet hvitt, og hvitt er 0xFF i pakket 4bpp - samme
+ * verdi EPD_IT8951_Clear_Refresh fyller sitt eget buffer med. */
+static void lagre_hvitt_hurtiglager(IT8951_Dev_Info info)
+{
+    size_t n = (size_t)(info.Panel_W / 2) * info.Panel_H;
+    uint8_t *hvitt = malloc(n);
+    if (hvitt == NULL) return;   /* uten hurtiglager tegner neste runde alt */
+    memset(hvitt, 0xFF, n);
+    state_store(hvitt, info.Panel_W, info.Panel_H);
+    free(hvitt);
+}
+
+/* Sender ett rektangel til panelet. Dekker det hele bredden, ligger radene
+ * allerede etter hverandre i det pakkede bufferet, og da trengs ingen kopi. */
+static void vis_rekt(const uint8_t *pakket, uint16_t w, const rect_t *r,
+                     UWORD mode, UDOUBLE target, int packed_write, uint8_t *bit)
+{
+    const uint8_t *kilde;
+
+    if (r->x == 0 && r->w == w) {
+        kilde = pakket + (size_t)r->y * (w / 2);
+    } else {
+        diff_slice(pakket, w, r, bit);
+        kilde = bit;
+    }
+
+    EPD_IT8951_4bp_Refresh((UBYTE *)kilde, r->x, r->y, r->w, r->h,
+                           false, target, mode, packed_write ? true : false);
+}
+
 int main(int argc, char **argv)
 {
     const char *kommando = NULL;
     const char *bmp_sti  = NULL;
-    int init_clear   = 0;
     int packed_write = 1;   /* --no-packed er en vei ut, ikke en normalvei */
+    int full         = 0;
+    int bruk_cache   = 1;
+    UWORD mode       = GC16_Mode;
 
     if (getenv("EPAPER_DEBUG") != NULL) Debug_Enabled = 1;
 
@@ -172,7 +232,19 @@ int main(int argc, char **argv)
         const char *a = argv[i];
         if (strcmp(a, "-v") == 0)               { Debug_Enabled = 1; }
         else if (strcmp(a, "--no-packed") == 0) { packed_write = 0; }
-        else if (strcmp(a, "--init") == 0)      { init_clear = 1; }
+        else if (strcmp(a, "--full") == 0)      { full = 1; }
+        else if (strcmp(a, "--no-cache") == 0)  { bruk_cache = 0; }
+        else if (strcmp(a, "--mode") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "epaper: --mode mangler en verdi\n");
+                return EXIT_USAGE;
+            }
+            if (les_mode(argv[i], &mode) != 0) {
+                fprintf(stderr, "epaper: ukjent bolgeform \"%s\"\n", argv[i]);
+                bruk();
+                return EXIT_USAGE;
+            }
+        }
         else if (strcmp(a, "-h") == 0 || strcmp(a, "--help") == 0) { bruk(); return EXIT_OK; }
         else if (a[0] == '-')  { fprintf(stderr, "epaper: ukjent flagg %s\n", a); bruk(); return EXIT_USAGE; }
         else if (kommando == NULL) { kommando = a; }
@@ -274,45 +346,111 @@ int main(int argc, char **argv)
     }
 
     if (er_clear) {
-        EPD_IT8951_Clear_Refresh(info, target, init_clear ? INIT_Mode : GC16_Mode,
-                                 packed_write ? true : false);
-    } else {
-        if (bilde.w != info.Panel_W || bilde.h != info.Panel_H) {
-            fprintf(stderr, "epaper: bildet er %ux%u, men panelet er %ux%u. "
-                            "render.py skal rotere til panelets format.\n",
-                    bilde.w, bilde.h, info.Panel_W, info.Panel_H);
-            ryd_opp();
-            bmp_free(&bilde);
-            return EXIT_INPUT;
-        }
+        state_drop();
+        EPD_IT8951_Clear_Refresh(info, target, mode, packed_write ? true : false);
 
-        size_t pakket_stor = (size_t)(bilde.w / 2) * bilde.h;
-        uint8_t *pakket = malloc(pakket_stor);
-        if (pakket == NULL) {
-            fprintf(stderr, "epaper: tom for minne (%zu byte)\n", pakket_stor);
-            ryd_opp();
-            bmp_free(&bilde);
-            return EXIT_HARDWARE;
-        }
-        pack_4bpp_mirrored(bilde.top_row, bilde.row_step, bilde.lut,
-                           bilde.w, bilde.h, pakket);
-        bmp_free(&bilde);
-        avbrutt_hvis_bedt_om();
+        /* Clear_Refresh returnerer så snart kommandoen er sendt – panelet
+         * oppdaterer fortsatt. Går vi ut nå, drar DEV_Module_Exit RST lav midt
+         * i oppdateringen. Den lille pausen er fordi LUTAFSR ikke rekker å bli
+         * nullforskjellig med en gang. */
+        DEV_Delay_ms(100);
+        EPD_IT8951_WaitForDisplayReady();
 
-        /* Hold=false gir Display_AreaBuf med eksplisitt måladresse – samme vei
-         * som Waveshares eget fullskjerms-4bpp-eksempel bruker. Vi venter selv
-         * på at panelet blir ferdig rett nedenfor. */
-        EPD_IT8951_4bp_Refresh(pakket, 0, 0, info.Panel_W, info.Panel_H,
-                               false, target, packed_write ? true : false);
-        free(pakket);
+        if (bruk_cache) lagre_hvitt_hurtiglager(info);
+        ryd_opp();
+        return EXIT_OK;
     }
 
-    /* Både Clear_Refresh og 4bp_Refresh returnerer så snart kommandoen er
-     * sendt – panelet oppdaterer fortsatt. Går vi ut nå, drar DEV_Module_Exit
-     * RST lav midt i oppdateringen. Den lille pausen er fordi LUTAFSR ikke
-     * rekker å bli nullforskjellig med en gang. */
+    if (bilde.w != info.Panel_W || bilde.h != info.Panel_H) {
+        fprintf(stderr, "epaper: bildet er %ux%u, men panelet er %ux%u. "
+                        "render.py skal rotere til panelets format.\n",
+                bilde.w, bilde.h, info.Panel_W, info.Panel_H);
+        ryd_opp();
+        bmp_free(&bilde);
+        return EXIT_INPUT;
+    }
+
+    size_t pakket_stor = (size_t)(bilde.w / 2) * bilde.h;
+    uint8_t *pakket = malloc(pakket_stor);
+    if (pakket == NULL) {
+        fprintf(stderr, "epaper: tom for minne (%zu byte)\n", pakket_stor);
+        ryd_opp();
+        bmp_free(&bilde);
+        return EXIT_HARDWARE;
+    }
+    pack_4bpp_mirrored(bilde.top_row, bilde.row_step, bilde.lut,
+                       bilde.w, bilde.h, pakket);
+    bmp_free(&bilde);
+    avbrutt_hvis_bedt_om();
+
+    /* Diffen gjøres på det pakkede bufferet, ikke på BMP-en: der er bildet
+     * allerede i panelets koordinater og allerede speilet, så rektanglene
+     * kommer ut klare til bruk. */
+    rect_t rekt[DIFF_MAKS_REKT] = { { 0, 0, info.Panel_W, info.Panel_H } };
+    int n = 1;
+
+    if (bruk_cache && !full) {
+        uint8_t *forrige = malloc(pakket_stor);
+        if (forrige != NULL) {
+            if (state_load(forrige, info.Panel_W, info.Panel_H) == 0) {
+                n = diff_rects(pakket, forrige, info.Panel_W, info.Panel_H,
+                               rekt, DIFF_MAKS_REKT, DIFF_FULL_PROSENT);
+            } else {
+                Debug("ingen brukbar forrige ramme - tegner alt\n");
+            }
+            free(forrige);
+        }
+    }
+
+    if (n == 0) {
+        /* E-paper holder på bildet sitt selv. Er ingenting endret, er det
+         * ingenting å gjøre, og panelet slipper en oppdatering helt. */
+        Debug("ingen endring siden forrige ramme - panelet rores ikke\n");
+        free(pakket);
+        ryd_opp();
+        return EXIT_OK;
+    }
+
+    if (Debug_Enabled) {
+        unsigned long areal = 0;
+        for (int i = 0; i < n; i++) areal += (unsigned long)rekt[i].w * rekt[i].h;
+        fprintf(stderr, "tegner %d rektangel%s, %lu%% av skjermen\n",
+                n, n == 1 ? "" : "er",
+                areal * 100UL / ((unsigned long)info.Panel_W * info.Panel_H));
+        for (int i = 0; i < n; i++) {
+            fprintf(stderr, "  %ux%u @ %u,%u\n",
+                    rekt[i].w, rekt[i].h, rekt[i].x, rekt[i].y);
+        }
+    }
+
+    uint8_t *bit = malloc(pakket_stor);   /* plass til det største rektangelet */
+    if (bit == NULL) {
+        fprintf(stderr, "epaper: tom for minne (%zu byte)\n", pakket_stor);
+        free(pakket);
+        ryd_opp();
+        return EXIT_HARDWARE;
+    }
+
+    /* Hurtiglageret kastes før første rektangel går ut, uansett flagg: fra nå
+     * av vet ingen hva som står på skjermen før alle rektanglene har gått ut.
+     * Blir vi avbrutt, eller gir panelet opp underveis, finner neste runde
+     * ingen fil og tegner alt på nytt – bedre enn en fil som lyver.
+     *
+     * 4bp_Refresh venter på panelet før den skriver, så rektanglene stiller
+     * seg selv i kø. Den siste ventinga tar vi under, som før. */
+    state_drop();
+
+    for (int i = 0; i < n; i++) {
+        avbrutt_hvis_bedt_om();
+        vis_rekt(pakket, info.Panel_W, &rekt[i], mode, target, packed_write, bit);
+    }
+    free(bit);
+
     DEV_Delay_ms(100);
     EPD_IT8951_WaitForDisplayReady();
+
+    if (bruk_cache) state_store(pakket, info.Panel_W, info.Panel_H);
+    free(pakket);
 
     ryd_opp();
     return EXIT_OK;

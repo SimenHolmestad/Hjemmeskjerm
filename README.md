@@ -13,7 +13,7 @@ Prosjektet er delt i to:
 | [`eink/`](eink) | Viser nettsida på e-paper-skjermen: et C-program som snakker med panelet, og en Python-løkke som gjør sida om til et bilde. |
 
 Begge deler kjører på Raspberry Pi-en. Nettsida serveres lokalt, Python-løkka tar skjermbilde
-av den hvert femte minutt og sender bildet til skjermen.
+av den hvert 30. sekund og sender det som har endret seg til skjermen.
 
 # Hardware
 

@@ -5,11 +5,12 @@ Raspberry Pi 3. Alt kjører på Pi-en:
 
 ```
 systemd: vite preview            → http://localhost:4173
-systemd: render/render.py        → løkke, hvert 5. minutt
+systemd: render/render.py        → løkke, hvert 30. sekund
            ├── chromium tar skjermbilde 1404×1872
            ├── Pillow: roter 90°, gråtone, 16 nivåer → frame.bmp (1872×1404)
            └── driver/epaper display frame.bmp
-                 └── SPI/GPIO → IT8951 → panelet
+                 ├── sammenligner med forrige ramme, finner rektanglene
+                 └── SPI/GPIO → IT8951 → panelet, ett rektangel om gangen
 ```
 
 `driver/` er et lite C-program som bare kan to ting: vise en BMP og tømme skjermen.
@@ -120,13 +121,19 @@ hjemmeskjerm-eink`.
 
 | Kommando | Gjør |
 |---|---|
-| `epaper display <fil.bmp>` | Viser bildet med GC16 (16 gråtoner, full oppdatering) |
+| `epaper display <fil.bmp>` | Viser bildet. Bare rektanglene som har endret seg siden sist blir tegnet |
 | `epaper clear` | Gjør skjermen hvit |
-| `epaper clear --init` | Som over, men med INIT-bølgeform – skrubber bort ghosting |
+| `epaper clear --mode init` | Som over, men med INIT-bølgeform – skrubber bort ghosting |
 | `epaper info` | Skriver `key=value` om panelet til stdout |
 
-Flagg: `-v` slår på driverlogg til stderr, `--no-packed` skriver pikseldataene ett ord om
-gangen i stedet for i blokker – se [Ting som er verdt å vite](#ting-som-er-verdt-å-vite).
+| Flagg | Gjør |
+|---|---|
+| `--mode <bølgeform>` | `init`, `du`, `gc16` (standard), `gl16`, `glr16`, `gld16`, `a2`, `du4`, eller et tall 0–7 |
+| `--full` | Tegn hele skjermen, ikke bare det som har endret seg |
+| `--no-cache` | Ikke bruk hurtiglageret: tegn alt, og la det stå tomt etterpå |
+| `-v` | Driverlogg til stderr, og hvilke rektangler som tegnes |
+| `--no-packed` | Skriv pikseldataene ett ord om gangen i stedet for i blokker |
+
 `EPAPER_VCOM` (volt, f.eks. `-1.14`) overstyrer den innkompilerte standardverdien;
 `render.py` setter den selv fra `eink.toml`.
 
@@ -173,8 +180,41 @@ bilde. Sjekk `info` etter en endring – `-v` skriver ut hvilken delefaktor bygg
 oppmerksom på at overføringsfeil kan være sporadiske, så en enkelt god ramme er ikke bevis;
 la `render.py` gå noen runder.
 
-**Ghosting.** Hver 20. runde kjøres `clear --init` først. Juster med `init_clear_every` i
-`eink.toml`, eller sett den til 0 for å skru det av.
+**Bare det som endrer seg blir tegnet.** GC16 driver hver piksel gjennom svart før den
+lander, så en oppdatering av hele panelet er den blinkingen man ser. `epaper` husker derfor
+ramma panelet sist fikk, finner rektanglene som skiller seg, og tegner bare dem. Resten av
+skjermen røres ikke og blinker ikke. Har ingenting endret seg, blir panelet stående helt i
+fred.
+
+Sammenligningen gjøres på det *pakkede* bufferet `pack.c` lager, ikke på BMP-en. Det bufferet
+er allerede i panelets koordinater, allerede speilet og allerede kvantisert til de 16 nivåene
+panelet viser, og én byte er nøyaktig to piksler. Da kommer rektanglene ut ferdig speilet og
+på bytegrenser, og `render.py` slipper å vite noe om det hele. Rutenettet er 16 piksler: 4 er
+det IT8951 krever av `Area_X` og `Area_W` i 4bpp, og 1872 går opp i 16. Blir det flere enn
+tolv rektangler, tegnes den omsluttende boksen i stedet, og dekker de mer enn halve skjermen,
+tegnes alt. Logikken ligger i `src/diff.c` og testes av `make test`.
+
+Forrige ramme ligger i `/var/lib/epaper/prev.4bpp`, med `/tmp` som reserve. Den skrives først
+når hele oppdateringen har gått gjennom, så en avbrutt kjøring etterlater ingen fil, og neste
+runde tegner alt på nytt. `--full` tvinger fram det samme når noe ser rart ut.
+
+**Bølgeform.** `mode` i `eink.toml`. `gc16` er standard og gir alle 16 gråtoner; det er de
+endrede rektanglene som blinker kort. `a2` blinker ikke i det hele tatt, men kan bare svart og
+hvitt, så gråtonene i YR-grafen og vær-ikonene forsvinner i feltene som oppdateres. Waveshare
+dokumenterer bare `init`, `gc16` og `a2` for denne skjermen, men modenummeret går rett videre
+til firmwarens LUT, så `gl16` og `du` er verdt å prøve mot panelet:
+
+```sh
+sudo ./epaper display ../frame.bmp --full --mode gl16
+```
+
+En bølgeform firmwaren ikke har gir ingen feilmelding, så dette må ses på: forvent enten et
+uendret panel eller et forvrengt bilde.
+
+**Ghosting.** Hver 60. runde – en halvtime – kjøres `clear --mode init` først. Juster med
+`init_clear_every` i `eink.toml`, eller sett den til 0 for å skru det av. Bruker du `a2` for
+alvor, er det denne knappen du skal se på: A2 er en relativ bølgeform og etterlater mer
+ghosting enn GC16.
 
 **Ei tapt runde er usynlig.** E-paper holder på bildet uten strøm, så når en runde feiler
 logger `render.py` det og beholder det forrige bildet. Etter tre feil på rad startes

@@ -30,7 +30,8 @@ LDLIBS  = -lm -lrt -lpthread -lbcm2835
 # til UWORD* i HostAreaPackedPixelWrite_4bp, og det har -O2 ellers lov til å
 # optimalisere i stykker.
 
-OUR_SRCS = $(SRC_DIR)/main.c $(SRC_DIR)/bmp.c $(SRC_DIR)/pack.c
+OUR_SRCS = $(SRC_DIR)/main.c $(SRC_DIR)/bmp.c $(SRC_DIR)/pack.c \
+           $(SRC_DIR)/diff.c $(SRC_DIR)/state.c
 VEN_SRCS = $(VEN_DIR)/EPD_IT8951.c $(VEN_DIR)/DEV_Config.c
 OBJS     = $(patsubst %.c,$(BIN_DIR)/%.o,$(OUR_SRCS) $(VEN_SRCS))
 
@@ -54,6 +55,9 @@ test:
 	$(CC) -std=gnu11 $(WARN) -O2 -I$(SRC_DIR) \
 	      tests/test_pack.c $(SRC_DIR)/pack.c -o $(BIN_DIR)/test_pack
 	@$(BIN_DIR)/test_pack
+	$(CC) -std=gnu11 $(WARN) -O2 -I$(SRC_DIR) \
+	      tests/test_diff.c $(SRC_DIR)/diff.c -o $(BIN_DIR)/test_diff
+	@$(BIN_DIR)/test_diff
 
 # Syntakssjekk uten lenking, mot en stubbet bcm2835.h. Lar oss fange skrivefeil
 # på en maskin uten libbcm2835 – typisk utviklingsmaskina.

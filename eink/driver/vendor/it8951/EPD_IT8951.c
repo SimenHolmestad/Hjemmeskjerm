@@ -913,7 +913,8 @@ void EPD_IT8951_2bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
 function :	EPD_IT8951_4bp_Refresh
 parameter:  
 ******************************************************************************/
-void EPD_IT8951_4bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, bool Packed_Write)
+/* hjemmeskjerm: Mode lagt til som parameter. */
+void EPD_IT8951_4bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H, bool Hold, UDOUBLE Target_Memory_Addr, UWORD Mode, bool Packed_Write)
 {
     IT8951_Load_Img_Info Load_Img_Info;
     IT8951_Area_Img_Info Area_Img_Info;
@@ -935,11 +936,11 @@ void EPD_IT8951_4bp_Refresh(UBYTE* Frame_Buf, UWORD X, UWORD Y, UWORD W, UWORD H
 
     if(Hold == true)
     {
-        EPD_IT8951_Display_Area(X,Y,W,H, GC16_Mode);
+        EPD_IT8951_Display_Area(X,Y,W,H, Mode);
     }
     else
     {
-        EPD_IT8951_Display_AreaBuf(X,Y,W,H, GC16_Mode,Target_Memory_Addr);
+        EPD_IT8951_Display_AreaBuf(X,Y,W,H, Mode,Target_Memory_Addr);
     }
 }
 

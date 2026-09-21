@@ -61,6 +61,16 @@ class Config:
         if self.rotasjon not in (90, 270):
             raise ValueError(f"panel.rotate må være 90 eller 270, ikke {self.rotasjon}")
 
+        # Samme navn som epaper kjenner. Sjekkes her og ikke bare der, fordi
+        # en skrivefeil ellers ville feilet hver eneste runde i det uendelige.
+        self.mode = str(panel.get("mode", "gc16"))
+        kjente = ("init", "du", "gc16", "gl16", "glr16", "gld16", "a2", "du4")
+        if self.mode not in kjente and self.mode not in [str(i) for i in range(8)]:
+            raise ValueError(
+                f"panel.mode må være en av {', '.join(kjente)} eller 0–7, "
+                f"ikke {self.mode}"
+            )
+
         bilde = raw.get("image", {})
         self.gamma = float(bilde.get("gamma", 1.0))
         self.kontrast = float(bilde.get("contrast", 1.0))
@@ -68,8 +78,8 @@ class Config:
             raise ValueError("image.gamma må være større enn 0")
 
         lokke = raw.get("loop", {})
-        self.intervall = float(lokke.get("interval_seconds", 300))
-        self.init_clear_hver = int(lokke.get("init_clear_every", 20))
+        self.intervall = float(lokke.get("interval_seconds", 30))
+        self.init_clear_hver = int(lokke.get("init_clear_every", 60))
 
         # Brukes bare til å gi en nyttig feilmelding når serveren er nede.
         self.webpage_dir = (rot.parent / "webpage").resolve()
@@ -287,9 +297,10 @@ def en_runde(nettleser: Nettleser, cfg: Config, lut: list[int],
 
     if cfg.init_clear_hver > 0 and runde % cfg.init_clear_hver == 0:
         log.info("full INIT-klaring for å skrubbe bort ghosting")
-        kall_epaper(cfg, "clear", "--init")
+        kall_epaper(cfg, "clear", "--mode", "init")
 
-    kall_epaper(cfg, "display", str(cfg.frame))
+    # epaper finner selv ut hva som har endret seg siden forrige runde.
+    kall_epaper(cfg, "display", str(cfg.frame), "--mode", cfg.mode)
 
 
 def main() -> int:
