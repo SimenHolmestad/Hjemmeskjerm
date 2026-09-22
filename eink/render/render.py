@@ -71,6 +71,10 @@ class Config:
                 f"ikke {self.mode}"
             )
 
+        # Ikke satt: da bestemmer epaper selv.
+        self.samtidige = _valgfritt_antall(panel, "concurrent")
+        self.maks_rekt = _valgfritt_antall(panel, "max_rects")
+
         bilde = raw.get("image", {})
         self.gamma = float(bilde.get("gamma", 1.0))
         self.kontrast = float(bilde.get("contrast", 1.0))
@@ -97,6 +101,20 @@ class Config:
         # slipper vi Playwright sin egen nedlasting, som ikke er bygget for
         # Raspberry Pi OS på arm64.
         self.chromium = os.environ.get("EINK_CHROMIUM") or _finn_chromium()
+
+
+def _valgfritt_antall(raw: dict, navn: str) -> int | None:
+    """Et positivt heltall, eller None om det ikke står i fila.
+
+    None betyr «la epaper bruke sin egen standard», så verdiene finnes bare ett
+    sted når de ikke er satt her.
+    """
+    if navn not in raw:
+        return None
+    verdi = int(raw[navn])
+    if verdi < 1:
+        raise ValueError(f"panel.{navn} må være minst 1, ikke {verdi}")
+    return verdi
 
 
 def _finn_chromium() -> str | None:
@@ -306,7 +324,13 @@ def en_runde(nettleser: Nettleser, cfg: Config, lut: list[int],
     # epaper finner selv ut hva som har endret seg siden forrige runde, og
     # sier hvor mye det ble. Det tallet er verdt å ha i journalen: blinker
     # skjermen mer enn ventet, er det her man ser hvorfor.
-    utdata = kall_epaper(cfg, "display", str(cfg.frame), "--mode", cfg.mode)
+    args = ["display", str(cfg.frame), "--mode", cfg.mode]
+    if cfg.samtidige is not None:
+        args += ["--concurrent", str(cfg.samtidige)]
+    if cfg.maks_rekt is not None:
+        args += ["--max-rects", str(cfg.maks_rekt)]
+
+    utdata = kall_epaper(cfg, *args)
     if utdata:
         log.info("epaper: %s", utdata.replace("\n", " "))
 

@@ -80,7 +80,7 @@ int main(void)
     uint8_t *na      = malloc((size_t)STRIDE * H);
     if (!forrige || !na) { printf("tom for minne\n"); return 1; }
 
-    rect_t r[DIFF_MAKS_REKT];
+    rect_t r[DIFF_TAK];
 
     /* --- 1. Like buffere ---------------------------------------------- */
     memset(forrige, 0xFF, (size_t)STRIDE * H);
@@ -294,6 +294,39 @@ int main(void)
         sjekk(brudd_overlapp == 0, "ingen av dem gir overlappende rektangler");
         sjekk(brudd_tak == 0, "ingen av dem sprenger taket");
         sjekk(brudd_just == 0, "alle er justert for 4bpp");
+    }
+
+    /* --- 10. Taket satt hoyere enn standarden ------------------------- *
+     * --max-rects kan settes per kjoering, saa diff_rects maa takle et annet
+     * tall enn DIFF_MAKS_REKT - og aldri skrive flere enn DIFF_TAK. */
+    {
+        memcpy(na, forrige, (size_t)STRIDE * H);
+        for (int rad = 0; rad < 24; rad++) {
+            uint16_t y = (uint16_t)(60 + rad * 52);
+            for (uint16_t dy = 0; dy < 16; dy++) {
+                memset(na + (size_t)(y + dy) * STRIDE + 40 + rad * 8, 0x00, 24);
+            }
+        }
+
+        /* Arealet maa regnes ut foer neste kall, som skriver over r. */
+        int smal = diff_rects(na, forrige, W, H, r, 4, DIFF_FULL_PROSENT);
+        unsigned long a_smal = 0;
+        for (int i = 0; i < smal; i++) a_smal += (unsigned long)r[i].w * r[i].h;
+        sjekk(smal > 0 && smal <= 4, "--max-rects 4 gir hoyst fire rektangler");
+        sjekk(alt_dekket(na, forrige, r, smal), "alt er dekket med fire");
+        sjekk(ingen_overlapp(r, smal), "de fire overlapper ikke");
+
+        int vid = diff_rects(na, forrige, W, H, r, 24, DIFF_FULL_PROSENT);
+        unsigned long a_vid = 0;
+        for (int i = 0; i < vid; i++) a_vid += (unsigned long)r[i].w * r[i].h;
+        sjekk(vid > 0 && vid <= 24, "--max-rects 24 gir hoyst tjuefire");
+        sjekk(vid > smal, "et hoyere tak gir flere rektangler");
+        sjekk(alt_dekket(na, forrige, r, vid), "alt er dekket med tjuefire");
+        sjekk(ingen_overlapp(r, vid), "de tjuefire overlapper ikke");
+        sjekk(a_vid < a_smal, "og mindre areal som tegnes");
+
+        int over = diff_rects(na, forrige, W, H, r, 1000, DIFF_FULL_PROSENT);
+        sjekk(over > 0 && over <= DIFF_TAK, "et tak over DIFF_TAK klippes til DIFF_TAK");
     }
 
     free(forrige); free(na);

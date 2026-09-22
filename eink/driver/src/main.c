@@ -33,12 +33,16 @@
  *
  * Hvor mange motorer panelet har står ikke i noe vi kan lese. Registerkartet
  * i EPD_IT8951.h peker mot seksten, men så mange tåler ikke vårt panel: over
- * åtte blir deler av skjermen rotete. Åtte gir rene rektangler. Den er like
- * stor som DIFF_MAKS_REKT, så det normalt blir én porsjon og ett blink. */
+ * åtte blir deler av skjermen rotete. Åtte gir rene rektangler.
+ *
+ * Standardverdi; kan overstyres per kjøring med --concurrent. */
 #define SAMTIDIGE 8
 
-_Static_assert(DIFF_MAKS_REKT <= SAMTIDIGE,
-               "flere rektangler enn vi fyrer av om gangen gir mer enn ett blink");
+/* Er DIFF_MAKS_REKT større, tegnes rektanglene i flere porsjoner, og hver
+ * porsjon er ett blink. Taket er romslig nok til at SAMTIDIGE kan settes ned
+ * uten at dette står i veien, men holder antall blink innenfor noe rimelig. */
+_Static_assert(DIFF_MAKS_REKT <= 8 * SAMTIDIGE,
+               "saa mange porsjoner gir like mange blink");
 
 /* Slås på med -v eller EPAPER_DEBUG=1. Leses av Debug()-makroen i vendret kode. */
 int Debug_Enabled = 0;
@@ -116,6 +120,9 @@ static void bruk(void)
         "               init, gc16 og a2 for 10,3-tommeren; resten gaar rett videre\n"
         "               til firmwarens LUT, saa de maa proves mot panelet.\n"
         "  --full       tegn hele skjermen, ikke bare det som har endret seg\n"
+        "  --max-rects <n>   hvor mange rektangler skjermen deles i\n"
+        "  --concurrent <n>  hvor mange som tegnes i samme slengen. Er --max-rects\n"
+        "                    stoerre, gaar de i flere porsjoner, ett blink per porsjon\n"
         "  --no-cache   ikke bruk hurtiglageret: tegn alt, og la det staa tomt\n"
         "  -v           logg fra driveren til stderr (samme som EPAPER_DEBUG=1)\n"
         "  --no-packed  skriv pikseldataene ett ord om gangen i stedet for i blokker.\n"
@@ -180,6 +187,20 @@ static void trygg_streng(char *ut, size_t n, const UBYTE *inn, size_t maks)
     ut[i] = '\0';
 }
 
+/* Et positivt heltall fra kommandolinja, innenfor det som gir mening. */
+static int les_antall(const char *s, const char *flagg, int maks, int *ut)
+{
+    char *slutt = NULL;
+    long v = strtol(s, &slutt, 10);
+    if (slutt == s || *slutt != '\0' || v < 1 || v > maks) {
+        fprintf(stderr, "epaper: %s maa vaere mellom 1 og %d, ikke \"%s\"\n",
+                flagg, maks, s);
+        return -1;
+    }
+    *ut = (int)v;
+    return 0;
+}
+
 /* Bolgeformen er et tall firmwarens LUT slaar opp i. Navnene er de vanlige
  * IT8951-modene; tallveien finnes fordi hvilke av dem en gitt firmware faktisk
  * har, ikke staar noe sted vi kan lese. */
@@ -239,6 +260,8 @@ int main(int argc, char **argv)
     int packed_write = 1;   /* --no-packed er en vei ut, ikke en normalvei */
     int full         = 0;
     int bruk_cache   = 1;
+    int samtidige    = SAMTIDIGE;
+    int maks_rekt    = DIFF_MAKS_REKT;
     UWORD mode       = GC16_Mode;
 
     if (getenv("EPAPER_DEBUG") != NULL) Debug_Enabled = 1;
@@ -249,6 +272,20 @@ int main(int argc, char **argv)
         else if (strcmp(a, "--no-packed") == 0) { packed_write = 0; }
         else if (strcmp(a, "--full") == 0)      { full = 1; }
         else if (strcmp(a, "--no-cache") == 0)  { bruk_cache = 0; }
+        else if (strcmp(a, "--concurrent") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "epaper: %s mangler en verdi\n", a);
+                return EXIT_USAGE;
+            }
+            if (les_antall(argv[i], a, DIFF_TAK, &samtidige) != 0) return EXIT_USAGE;
+        }
+        else if (strcmp(a, "--max-rects") == 0) {
+            if (++i >= argc) {
+                fprintf(stderr, "epaper: %s mangler en verdi\n", a);
+                return EXIT_USAGE;
+            }
+            if (les_antall(argv[i], a, DIFF_TAK, &maks_rekt) != 0) return EXIT_USAGE;
+        }
         else if (strcmp(a, "--mode") == 0) {
             if (++i >= argc) {
                 fprintf(stderr, "epaper: --mode mangler en verdi\n");
@@ -401,7 +438,7 @@ int main(int argc, char **argv)
     /* Diffen gjøres på det pakkede bufferet, ikke på BMP-en: der er bildet
      * allerede i panelets koordinater og allerede speilet, så rektanglene
      * kommer ut klare til bruk. */
-    rect_t rekt[DIFF_MAKS_REKT] = { { 0, 0, info.Panel_W, info.Panel_H } };
+    rect_t rekt[DIFF_TAK] = { { 0, 0, info.Panel_W, info.Panel_H } };
     int n = 1;
 
     if (bruk_cache && !full) {
@@ -409,7 +446,7 @@ int main(int argc, char **argv)
         if (forrige != NULL) {
             if (state_load(forrige, info.Panel_W, info.Panel_H) == 0) {
                 n = diff_rects(pakket, forrige, info.Panel_W, info.Panel_H,
-                               rekt, DIFF_MAKS_REKT, DIFF_FULL_PROSENT);
+                               rekt, maks_rekt, DIFF_FULL_PROSENT);
             } else {
                 Debug("ingen brukbar forrige ramme - tegner alt\n");
             }
@@ -462,8 +499,8 @@ int main(int argc, char **argv)
      * fyres alle DPY_BUF_AREA av etter hverandre uten å vente imellom.
      * Panelet tegner dem samtidig, så en porsjon koster én bølgeform og gir
      * ett blink, uansett hvor mange rektangler den inneholder. */
-    for (int i = 0; i < n; i += SAMTIDIGE) {
-        int slutt = (i + SAMTIDIGE < n) ? i + SAMTIDIGE : n;
+    for (int i = 0; i < n; i += samtidige) {
+        int slutt = (i + samtidige < n) ? i + samtidige : n;
 
         EPD_IT8951_WaitForDisplayReady();
         for (int j = i; j < slutt; j++) {

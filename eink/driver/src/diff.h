@@ -11,10 +11,14 @@ typedef struct { uint16_t x, y, w, h; } rect_t;
  * 16 gir litt margin samtidig som 1872 går opp i det. */
 #define DIFF_TILE 16
 
-/* Så mange rektangler fyrer panelet av på én gang, og en slik porsjon koster
- * én bølgeform og gir ett blink. Flere ville krevd en porsjon til, altså et
- * blink til – se SAMTIDIGE i main.c, som denne skal holde seg innenfor. */
+/* Standardverdi for hvor mange rektangler skjermen deles i. Kan overstyres
+ * per kjøring med --max-rects. Er den større enn SAMTIDIGE i main.c, tegnes
+ * rektanglene i flere porsjoner, og hver porsjon er ett blink. */
 #define DIFF_MAKS_REKT 8
+
+/* Hardt tak. diff_rects skriver aldri flere enn dette uansett hva den blir
+ * bedt om, så `ut` trenger aldri være større. */
+#define DIFF_TAK 64
 
 /* Dekker rektanglene mer enn dette av skjermen, tegner vi alt. */
 #define DIFF_FULL_PROSENT 50
@@ -23,7 +27,8 @@ typedef struct { uint16_t x, y, w, h; } rect_t;
  * lager – og skriver rektanglene som skiller seg til `ut`.
  *
  * Returnerer antall rektangler, 0 om bildene er like. Aldri mer enn
- * `maks_rekt`; blir det flere, slås alt sammen til den omsluttende boksen.
+ * `maks_rekt`, og aldri mer enn DIFF_TAK; blir det flere, slås de nærmeste
+ * sammen to og to til det er få nok igjen.
  * Dekker resultatet mer enn `full_prosent` av skjermen, returneres i stedet
  * ett rektangel som dekker hele panelet.
  *

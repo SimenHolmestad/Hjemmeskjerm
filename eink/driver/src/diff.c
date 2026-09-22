@@ -16,10 +16,6 @@
 
 static uint8_t skitten[MAKS_SIDE * MAKS_SIDE];
 
-/* Hvor mange rektangler den grådige oppdelingen får lov å holde på før de
- * slås sammen. Taket i seg selv er ikke viktig; det skal bare være romslig
- * nok til at sammenslåingen har noe å velge mellom. */
-#define MAKS_RAA 64
 
 static int rute_endret(const uint8_t *na, const uint8_t *forrige,
                        uint32_t stride, uint16_t x, uint16_t y,
@@ -131,6 +127,10 @@ int diff_rects(const uint8_t *na, const uint8_t *forrige,
     /* Går ikke bredden opp i rutenettet, kan siste kolonne bli en bredde
      * IT8951 ikke godtar i 4bpp. Da tegner vi heller alt: det er den bredden
      * driveren uansett har brukt hele tiden. */
+    /* Den grådige oppdelingen holder aldri på flere enn DIFF_TAK, så et
+     * høyere tall ville uansett ikke gitt flere rektangler. */
+    if (maks_rekt > DIFF_TAK) maks_rekt = DIFF_TAK;
+
     const rect_t hele = { 0, 0, w, h };
     if (maks_rekt < 1 || w % DIFF_TILE != 0 || kol > MAKS_SIDE || rad > MAKS_SIDE) {
         ut[0] = hele;
@@ -163,7 +163,7 @@ int diff_rects(const uint8_t *na, const uint8_t *forrige,
 
     /* Grådig oppdeling: voks til høyre så langt rutene er skitne, så nedover
      * så lenge hele kolonneområdet er skittent. */
-    rect_t raa[MAKS_RAA];
+    rect_t raa[DIFF_TAK];
     int m = 0;
     for (int r = min_r; r <= maks_r; r++) {
         for (int c = min_c; c <= maks_c; c++) {
@@ -186,7 +186,7 @@ int diff_rects(const uint8_t *na, const uint8_t *forrige,
                 memset(&skitten[(size_t)i * kol + c], 0, (size_t)(c2 - c + 1));
             }
 
-            if (m == MAKS_RAA) slaa_sammen_billigste(raa, &m);
+            if (m == DIFF_TAK) slaa_sammen_billigste(raa, &m);
             raa[m++] = rekt_av_ruter(c, r, c2, r2, w, h);
         }
     }

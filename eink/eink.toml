@@ -25,6 +25,14 @@ rotate = 90
 # vær-ikonene forsvinner. Waveshare dokumenterer bare init, gc16 og a2 for
 # 10,3-tommeren; gl16 og du er verdt å prøve, se README.
 mode = "gc16"
+# Hvor mange rektangler som tegnes i samme slengen. IT8951 tegner dem
+# samtidig, så en porsjon koster ett blink uansett hvor mange den inneholder.
+# Over åtte blir deler av skjermen rotete på vårt panel.
+concurrent = 8
+# Hvor mange rektangler diffen får dele skjermen i. Flere gir mindre areal som
+# tegnes opp, men er den større enn `concurrent`, går de i flere batcher –
+# og hver batch er ett blink.
+max_rects = 8
 
 [image]
 # Justeres mot det ekte panelet – e-paper ser gjerne flatere ut enn en skjerm.

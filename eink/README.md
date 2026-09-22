@@ -130,6 +130,8 @@ hjemmeskjerm-eink`.
 |---|---|
 | `--mode <bølgeform>` | `init`, `du`, `gc16` (standard), `gl16`, `glr16`, `gld16`, `a2`, `du4`, eller et tall 0–7 |
 | `--full` | Tegn hele skjermen, ikke bare det som har endret seg |
+| `--max-rects <n>` | Hvor mange rektangler skjermen deles i |
+| `--concurrent <n>` | Hvor mange som tegnes i samme slengen |
 | `--no-cache` | Ikke bruk hurtiglageret: tegn alt, og la det stå tomt etterpå |
 | `-v` | Driverlogg til stderr, og hvilke rektangler som tegnes |
 | `--no-packed` | Skriv pikseldataene ett ord om gangen i stedet for i blokker |
@@ -234,16 +236,30 @@ kommando, og HRDY holdes lav mens panelet oppdaterer, så man skulle tro at nest
 uansett måtte vente. Målt på vårt panel med ni rektangler gikk det likevel fra omtrent sju
 sekunder til omtrent tre, og av de tre er det meste oppstart. Ni bølgeformer ble til én.
 
-`SAMTIDIGE` i `src/main.c` er hvor mange som fyres av før vi venter igjen. Den finnes fordi
-antallet LUT-motorer ikke står i noe vi kan lese. Registerkartet peker mot seksten –
-`LUT0`-registrene ligger med 0x40 i steg, og `LUTAFSR` er status for alle sammen – men så
-mange tåler ikke vårt panel: over åtte blir deler av skjermen rotete. Åtte gir rene
-rektangler. `DIFF_MAKS_REKT` i `src/diff.h` holdes lik, så en oppdatering normalt blir én
-porsjon og dermed ett blink; et `_Static_assert` passer på at de ikke kommer i utakt.
+Hvor mange som fyres av før vi venter igjen står i `concurrent`. Tallet finnes fordi antallet
+LUT-motorer ikke står i noe vi kan lese. Registerkartet peker mot seksten – `LUT0`-registrene
+ligger med 0x40 i steg, og `LUTAFSR` er status for alle sammen – men så mange tåler ikke vårt
+panel: over åtte blir deler av skjermen rotete. Åtte gir rene rektangler.
 
-Blir deler av skjermen rotete, eller blir rektangler stående uoppdaterte, er tallet for høyt
-for panelet. Da er hurtiglageret i tillegg blitt feil, siden det mener skjermen er riktig
-tegnet, og `--full` retter det opp. Senk begge tallene sammen.
+`max_rects` er hvor mange rektangler diffen får dele skjermen i. Er den større enn
+`concurrent`, går de i flere porsjoner, og **hver porsjon er ett blink**. Det er en reell
+avveining: flere rektangler betyr mindre areal som tegnes opp, men flere blink. Ett blink over
+et større område er ikke opplagt verre enn to blink over et mindre – her må man se på veggen.
+
+| `max_rects` | Porsjoner ved `concurrent = 8` | Areal som tegnes |
+|---|---|---|
+| 8 | 1 | ~11 % |
+| 16 | 2 | ~4 % |
+| 24 | 3 | ~3 % |
+
+Tallene er snitt over tilfeldige endringsmønstre, ikke over ekte tavler, så de sier mest om
+formen på kurven: gevinsten flater ut fort.
+
+Begge settes i [`eink.toml`](eink.toml) og sendes videre som `--concurrent` og `--max-rects`,
+så de kan endres uten å bygge om. Utelates de, gjelder standardverdiene i `src/main.c` og
+`src/diff.h`. Blir deler av skjermen rotete, eller blir rektangler stående uoppdaterte, er
+`concurrent` for høy for panelet. Da er hurtiglageret i tillegg blitt feil, siden det mener
+skjermen er riktig tegnet, og `--full` retter det opp.
 
 Registerlesing duger ikke til å finne grensa – `EPD_IT8951_ReadReg` går selv gjennom
 `WriteCommand` → `ReadBusy`, så et forsøk på å lese `LUTAFSR` underveis ville serialisert
