@@ -17,7 +17,9 @@ User=simen
 WorkingDirectory=/home/simen/Hjemmeskjerm/webpage
 # preview serverer det ferdigbygde resultatet. Husk `pnpm build` etter en
 # `git pull` som endrer nettsida.
-ExecStart=/usr/bin/pnpm preview --port 4173
+# Kaller vite direkte: systemd har ikke pnpm i PATH. Stien til node må være
+# absolutt og er den `which node` gir.
+ExecStart=/usr/bin/node node_modules/vite/bin/vite.js preview --port 4173
 Restart=always
 RestartSec=5
 

@@ -104,7 +104,11 @@ cd ~/Hjemmeskjerm/eink/render && .venv/bin/python render.py --once -v
 ## Kjør som tjeneste
 
 Unit-filene i [`systemd/`](systemd) er skrevet for `/home/simen/Hjemmeskjerm` og brukeren
-`simen`. Endre `User=` og stiene om det er annerledes hos deg.
+`simen`. Endre `User=` og stiene om det er annerledes hos deg. systemd arver ikke PATH-en fra
+skallet ditt, så alle programmer må oppgis med full sti. Ligger ikke node på `/usr/bin/node`
+(sjekk med `which node`), må `ExecStart=` i `hjemmeskjerm-web.service` peke dit den ligger.
+Er node installert med nvm, ligger den under `~/.nvm` og forsvinner når du bytter versjon –
+da er det enklere å installere node fra apt eller NodeSource.
 
 ```sh
 sudo cp systemd/*.service /etc/systemd/system/
