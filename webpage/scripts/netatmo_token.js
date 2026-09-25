@@ -10,7 +10,7 @@ const SCOPE = "read_station read_homecoach";
 const env = loadEnv("development", process.cwd(), "NETATMO");
 if (!env.NETATMO_CLIENT_ID || !env.NETATMO_CLIENT_SECRET) {
   console.error(
-    "Mangler NETATMO_CLIENT_ID og NETATMO_CLIENT_SECRET i .env.local.\n" +
+    "Mangler NETATMO_CLIENT_ID og NETATMO_CLIENT_SECRET i .env.\n" +
     "Begge står på appsiden din på dev.netatmo.com.",
   );
   process.exit(1);
@@ -42,12 +42,12 @@ async function exchange(code) {
   return json.refresh_token;
 }
 
-// Bytter ut NETATMO_REFRESH_TOKEN i .env.local, eller legger den til.
+// Bytter ut NETATMO_REFRESH_TOKEN i .env, eller legger den til.
 function saveToken(token) {
   const line = `NETATMO_REFRESH_TOKEN=${token}`;
-  const current = fs.readFileSync(".env.local", "utf8");
+  const current = fs.readFileSync(".env", "utf8");
   fs.writeFileSync(
-    ".env.local",
+    ".env",
     /^NETATMO_REFRESH_TOKEN=.*$/m.test(current)
       ? current.replace(/^NETATMO_REFRESH_TOKEN=.*$/m, line)
       : `${current.replace(/\n*$/, "\n")}${line}\n`,
@@ -67,8 +67,8 @@ const server = http.createServer(async (req, res) => {
   try {
     if (url.searchParams.get("state") !== state) throw new Error("state stemmer ikke");
     saveToken(await exchange(code));
-    reply("Ferdig. Refresh-tokenet er lagret i .env.local – du kan lukke vinduet.");
-    console.log("\n✓ NETATMO_REFRESH_TOKEN lagret i .env.local. Kjør `pnpm dev`.");
+    reply("Ferdig. Refresh-tokenet er lagret i .env – du kan lukke vinduet.");
+    console.log("\n✓ NETATMO_REFRESH_TOKEN lagret i .env. Kjør `pnpm dev`.");
   } catch (error) {
     reply(`Klarte ikke hente token: ${error.message}`);
     console.error(`\n✗ ${error.message}`);

@@ -35,7 +35,7 @@ def copy_code_to_raspberry_pi() -> None:
         )
 
     # This gitignored file should be copied
-    run_command_locally("rsync", "-a", "webpage/.env.local", f"{PI_HOST}:{PI_DEST}/webpage/.env.local")
+    run_command_locally("rsync", "-a", "webpage/.env", f"{PI_HOST}:{PI_DEST}/webpage/.env")
 
 
 def update_systemd_unit_files() -> None:
@@ -126,8 +126,8 @@ def main() -> None:
     args = parser.parse_args()
 
     # Gitignorert, men Netatmo-oppsettet på Pi-en trenger den.
-    if not (ROOT / "webpage" / ".env.local").exists():
-        sys.exit("fant ikke webpage/.env.local – se webpage/README.md om Netatmo")
+    if not (ROOT / "webpage" / ".env").exists():
+        sys.exit("fant ikke webpage/.env – se webpage/README.md om Netatmo")
 
     if args.web_only:
         deploy_web_only()

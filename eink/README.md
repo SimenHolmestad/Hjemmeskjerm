@@ -142,7 +142,7 @@ kjører på nytt.
 
 Bare filer som ligger i git blir kopiert, så `node_modules`, `.venv`, `driver/build` og
 `epaper` på Pi-en røres ikke – lista kan ikke komme i utakt med `.gitignore`. Unntaket er
-`webpage/.env.local`, som er gitignorert, men som Netatmo-oppsettet trenger på Pi-en; den
+`webpage/.env`, som er gitignorert, men som Netatmo-oppsettet trenger på Pi-en; den
 sendes for seg.
 
 `webpage/.netatmo.json` sendes derimot aldri. Netatmo roterer refresh-tokenet og gjør det

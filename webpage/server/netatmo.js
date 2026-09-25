@@ -26,7 +26,7 @@ function readState(root) {
   try {
     return JSON.parse(fs.readFileSync(path.join(root, STATE_FILE), "utf8"));
   } catch {
-    return {}; // mangler eller er korrupt – da bootstrapper vi fra .env.local igjen
+    return {}; // mangler eller er korrupt – da bootstrapper vi fra .env igjen
   }
 }
 
@@ -36,7 +36,7 @@ function writeState(root, state) {
   fs.renameSync(`${file}.tmp`, file); // atomisk, så en drept prosess aldri etterlater en halv fil
 }
 
-// Et token som er limt inn i .env.local etter bootstrap skal vinne over det lagrede.
+// Et token som er limt inn i .env etter bootstrap skal vinne over det lagrede.
 function pickRefreshToken(state, env) {
   if (env.NETATMO_REFRESH_TOKEN && env.NETATMO_REFRESH_TOKEN !== state.seed) {
     return env.NETATMO_REFRESH_TOKEN;
@@ -48,7 +48,7 @@ async function refresh(root, env) {
   const state = readState(root); // les på nytt: en annen prosess kan nettopp ha rotert tokenet
   const refreshToken = pickRefreshToken(state, env);
   if (!refreshToken || !env.NETATMO_CLIENT_ID || !env.NETATMO_CLIENT_SECRET) {
-    throw new Error("mangler NETATMO_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN i .env.local");
+    throw new Error("mangler NETATMO_CLIENT_ID/CLIENT_SECRET/REFRESH_TOKEN i .env");
   }
 
   const response = await fetch(`${API}/oauth2/token`, {
@@ -70,7 +70,7 @@ async function refresh(root, env) {
       console.error(
         "[netatmo] invalid_grant – refresh-tokenet er ugyldig.\n" +
           "  Lag et nytt på dev.netatmo.com (scopes: read_homecoach read_station),\n" +
-          "  og lim det inn i .env.local som NETATMO_REFRESH_TOKEN. Serveren restarter selv.",
+          "  og lim det inn i .env som NETATMO_REFRESH_TOKEN. Serveren restarter selv.",
       );
     }
     throw new Error(`token: ${json.error || `HTTP ${response.status}`}`);
