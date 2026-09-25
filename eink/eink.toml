@@ -8,7 +8,7 @@ height         = 1872
 # Entur-tavla og YR-widgeten ligger i iframe-er fra andre domener. Vi kan
 # ikke spørre dem når de er ferdige, så vi venter en fast tid. Er tallene i
 # statuslinja fortsatt "–" på skjermbildet, er denne for lav.
-settle_seconds = 10
+settle_seconds = 5
 # Sida oppdaterer sine egne tall selv, så vi laster den sjelden på nytt.
 # Det er først og fremst for å holde minnebruken i sjakk.
 reload_minutes = 60
@@ -28,7 +28,7 @@ mode = "gc16"
 # Hvor mange rektangler som tegnes i samme slengen. IT8951 tegner dem
 # samtidig, så en porsjon koster ett blink uansett hvor mange den inneholder.
 # Over åtte blir deler av skjermen rotete på vårt panel.
-concurrent = 8
+concurrent = 4
 # Hvor mange rektangler diffen får dele skjermen i. Flere gir mindre areal som
 # tegnes opp, men er den større enn `concurrent`, går de i flere batcher –
 # og hver batch er ett blink.
