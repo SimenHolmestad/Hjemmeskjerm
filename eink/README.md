@@ -117,9 +117,73 @@ sudo systemctl enable --now hjemmeskjerm-web hjemmeskjerm-eink
 journalctl -u hjemmeskjerm-eink -f
 ```
 
-Etter en `git pull` som endrer nettsida: `cd webpage && pnpm build && sudo systemctl restart
-hjemmeskjerm-web`. Endrer den C-koden: `cd eink/driver && make && sudo systemctl restart
-hjemmeskjerm-eink`.
+## Oppdatere koden
+
+[`deploy.py`](../deploy.py) i rota gjør hele runden: stopper e-paper-løkka, kopierer koden
+over, bygger driveren og nettsida på Pi-en, og starter tjenestene igjen.
+
+```sh
+./deploy.py
+PI_HOST=pi@192.168.1.42 PI_DEST=/home/pi/Hjemmeskjerm ./deploy.py
+```
+
+`PI_HOST`, `PI_DEST` og `PI_PNPM` overstyrer maskin, sti og hvor pnpm ligger. pnpm oppgis med
+full sti av nøyaktig samme grunn som unit-fila oppgir node med full sti: et ssh-kall får bare
+`/usr/local/bin:/usr/bin:/bin:/usr/games`. pnpm legger seg selv til PATH nederst i `.bashrc`,
+men `.bashrc` returnerer på vaktposten for ikke-interaktive skall lenge før den kommer dit.
+Derfor virker `pnpm` når du logger inn og skriver den, og finnes ikke når skriptet kaller den –
+heller ikke gjennom et login-skall. `command -v pnpm` i et interaktivt skall på Pi-en gir stien
+å sette.
+
+Løkka stoppes først med vilje. `pnpm build` tømmer `dist/`, og i det vinduet svarer vite
+preview med en 404 som ellers ville blitt tatt skjermbilde av og malt på veggen. Feiler et
+steg, blir løkka stående stoppet: skjermen fryser på det forrige bildet, og du retter opp og
+kjører på nytt.
+
+Bare filer som ligger i git blir kopiert, så `node_modules`, `.venv`, `driver/build` og
+`epaper` på Pi-en røres ikke – lista kan ikke komme i utakt med `.gitignore`. Unntaket er
+`webpage/.env.local`, som er gitignorert, men som Netatmo-oppsettet trenger på Pi-en; den
+sendes for seg.
+
+`webpage/.netatmo.json` sendes derimot aldri. Netatmo roterer refresh-tokenet og gjør det
+forrige ugyldig, så Pi-en eier sin egen fil. Kopierer du din over, kaster du tokenet som
+virker, og får `invalid_grant` til du bootstrapper på nytt.
+
+`eink.toml` ligger i git og blir overskrevet. Justerer du `vcom`, `gamma` eller `concurrent`
+mot det ekte panelet, må verdiene tilbake til repoet før neste deploy.
+
+Skriptet bygger med standardverdien for `SPI_DIVIDER`, altså 16. Flytter du skjermen til en
+Pi 4B, må `make SPI_DIVIDER=32` kjøres for hånd – se nedenfor.
+
+### Sudoers for deploy
+
+Skriptet starter og stopper tjenestene over ssh, og ssh gir ingen terminal å taste passord i.
+Brukeren må derfor få kjøre akkurat disse kommandoene uten passord. Bruk `visudo`, som nekter
+å lagre en fil med syntaksfeil – en ødelagt fil under `/etc/sudoers.d/` gjør at `sudo` slutter
+å virke i det hele tatt:
+
+```sh
+sudo visudo -f /etc/sudoers.d/hjemmeskjerm
+```
+
+```
+simen ALL=(root) NOPASSWD: /usr/bin/systemctl start hjemmeskjerm-web, \
+  /usr/bin/systemctl stop hjemmeskjerm-web, \
+  /usr/bin/systemctl restart hjemmeskjerm-web, \
+  /usr/bin/systemctl start hjemmeskjerm-eink, \
+  /usr/bin/systemctl stop hjemmeskjerm-eink, \
+  /usr/bin/systemctl restart hjemmeskjerm-eink, \
+  /usr/bin/systemctl daemon-reload, \
+  /usr/bin/cp /home/simen/Hjemmeskjerm/eink/systemd/hjemmeskjerm-web.service /etc/systemd/system/hjemmeskjerm-web.service, \
+  /usr/bin/cp /home/simen/Hjemmeskjerm/eink/systemd/hjemmeskjerm-eink.service /etc/systemd/system/hjemmeskjerm-eink.service
+```
+
+sudo sammenligner hele kommandolinja tegn for tegn. `systemctl restart hjemmeskjerm-web` og
+`systemctl restart hjemmeskjerm-web.service` er to forskjellige strenger, og bare den første
+står her. Stien må være den `command -v systemctl` gir på Pi-en, og stiene i `cp`-linjene må
+stemme med `PI_DEST`.
+
+Skriptet kopierer unit-filene bare når de faktisk er endret, og kjører `daemon-reload` etterpå.
 
 ## `epaper`
 
