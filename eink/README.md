@@ -103,7 +103,7 @@ cd ~/Hjemmeskjerm/eink/render && .venv/bin/python render.py --once -v
 
 ## Kjør som tjeneste
 
-Unit-filene i [`systemd/`](systemd) er skrevet for `/home/simen/Hjemmeskjerm` og brukeren
+Unit-filene i [`systemd/`](../systemd) er skrevet for `/home/simen/Hjemmeskjerm` og brukeren
 `simen`. Endre `User=` og stiene om det er annerledes hos deg. systemd arver ikke PATH-en fra
 skallet ditt, så alle programmer må oppgis med full sti. Ligger ikke node på `/usr/bin/node`
 (sjekk med `which node`), må `ExecStart=` i `hjemmeskjerm-web.service` peke dit den ligger.
@@ -111,7 +111,7 @@ Er node installert med nvm, ligger den under `~/.nvm` og forsvinner når du bytt
 da er det enklere å installere node fra apt eller NodeSource.
 
 ```sh
-sudo cp systemd/*.service /etc/systemd/system/
+sudo cp ~/Hjemmeskjerm/systemd/*.service /etc/systemd/system/
 sudo systemctl daemon-reload
 sudo systemctl enable --now hjemmeskjerm-web hjemmeskjerm-eink
 journalctl -u hjemmeskjerm-eink -f
@@ -174,8 +174,8 @@ simen ALL=(root) NOPASSWD: /usr/bin/systemctl start hjemmeskjerm-web, \
   /usr/bin/systemctl stop hjemmeskjerm-eink, \
   /usr/bin/systemctl restart hjemmeskjerm-eink, \
   /usr/bin/systemctl daemon-reload, \
-  /usr/bin/cp /home/simen/Hjemmeskjerm/eink/systemd/hjemmeskjerm-web.service /etc/systemd/system/hjemmeskjerm-web.service, \
-  /usr/bin/cp /home/simen/Hjemmeskjerm/eink/systemd/hjemmeskjerm-eink.service /etc/systemd/system/hjemmeskjerm-eink.service
+  /usr/bin/cp /home/simen/Hjemmeskjerm/systemd/hjemmeskjerm-web.service /etc/systemd/system/hjemmeskjerm-web.service, \
+  /usr/bin/cp /home/simen/Hjemmeskjerm/systemd/hjemmeskjerm-eink.service /etc/systemd/system/hjemmeskjerm-eink.service
 ```
 
 sudo sammenligner hele kommandolinja tegn for tegn. `systemctl restart hjemmeskjerm-web` og

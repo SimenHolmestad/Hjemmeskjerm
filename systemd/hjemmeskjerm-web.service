@@ -2,7 +2,7 @@
 # binder seg med vilje til localhost.
 #
 # Installeres med:
-#   sudo cp eink/systemd/*.service /etc/systemd/system/
+#   sudo cp systemd/*.service /etc/systemd/system/
 #   sudo systemctl daemon-reload
 #   sudo systemctl enable --now hjemmeskjerm-web hjemmeskjerm-eink
 

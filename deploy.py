@@ -41,8 +41,8 @@ def copy_code_to_raspberry_pi() -> None:
 def update_systemd_unit_files() -> None:
     """Kopierer unit-filene bare når de faktisk er endret."""
     changed = False
-    for unit_file in sorted((ROOT / "eink" / "systemd").glob("*.service")):
-        source = f"{PI_DEST}/eink/systemd/{unit_file.name}"
+    for unit_file in sorted((ROOT / "systemd").glob("*.service")):
+        source = f"{PI_DEST}/systemd/{unit_file.name}"
         target = f"/etc/systemd/system/{unit_file.name}"
         if run_ssh_command("cmp", "-s", source, target, check=False).returncode == 0:
             continue
