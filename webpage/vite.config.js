@@ -13,6 +13,6 @@ const toyenbadetProxy = {
 
 export default defineConfig({
   plugins: [netatmo()],
-  server: { proxy: toyenbadetProxy },
+  server: { proxy: toyenbadetProxy, open: true },
   preview: { proxy: toyenbadetProxy },
 });
