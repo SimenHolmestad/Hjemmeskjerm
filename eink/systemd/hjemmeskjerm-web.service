@@ -19,7 +19,7 @@ WorkingDirectory=/home/simen/Hjemmeskjerm/webpage
 # `git pull` som endrer nettsida.
 # Kaller vite direkte: systemd har ikke pnpm i PATH. Stien til node må være
 # absolutt og er den `which node` gir.
-ExecStart=/usr/bin/node node_modules/vite/bin/vite.js preview --port 4173
+ExecStart=/usr/bin/node node_modules/vite/bin/vite.js preview --port 4173 --host
 Restart=always
 RestartSec=5
 
